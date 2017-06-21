@@ -11,6 +11,10 @@ npm install --save ndx-mongo
 ```coffeescript
 require 'ndx-server
   dbEngine: require 'ndx-mongo'
+  mongoUrl: 'mongodb://192.168.99.100:27017/test'
   tables: ['users', 'table1', 'table2']
 .start()
 ```
+
+## Environment variables
+mongoUrl can be set with the environment variable `MONGO_URL`  
