@@ -1,0 +1,33 @@
+{
+  "name": "ndx-mongo",
+  "version": "0.0.2",
+  "description": "Mongo database connector for ndx-framework apps",
+  "main": "build/index.js",
+  "scripts": {
+    "test": "node build/test.js"
+  },
+  "ndx": true,
+  "loadOrder": "ignore",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ndxbxrme/ndx-mongo"
+  },
+  "author": "ndxbxrme",
+  "license": "MIT",
+  "homepage": "https://github.com/ndxbxrme/ndx-mongo",
+  "devDependencies": {
+    "grunt": "^1.0.1",
+    "grunt-cli": "^1.2.0",
+    "grunt-contrib-clean": "^1.1.0",
+    "grunt-contrib-coffee": "^1.0.0",
+    "grunt-contrib-nodeunit": "^1.0.0",
+    "grunt-contrib-watch": "^1.0.0",
+    "load-grunt-tasks": "^3.5.2"
+  },
+  "dependencies": {
+    "async": "^2.4.1",
+    "mongodb": "^2.2.29",
+    "objtrans": "0.0.14",
+    "underscore.string": "^3.3.4"
+  }
+}
