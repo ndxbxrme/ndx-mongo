@@ -78,7 +78,12 @@
       var key, results1;
       results1 = [];
       for (key in obj) {
-        if (key.indexOf('$') === 0) {
+        if (key === '$like') {
+          results1.push(output[route] = {
+            $regex: ".*" + (obj[key] || '') + ".*",
+            $options: 'i'
+          });
+        } else if (key.indexOf('$') === 0) {
           output[key] = {};
           results1.push(walk(obj[key], route, output[key]));
         } else if (Object.prototype.toString.call(obj[key]) === '[object Object]') {

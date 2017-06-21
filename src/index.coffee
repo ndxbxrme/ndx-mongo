@@ -46,7 +46,11 @@ convertWhere = (obj) ->
   output = {}
   walk = (obj, route, output) ->
     for key of obj
-      if key.indexOf('$') is 0
+      if key is '$like'
+        output[route] =
+          $regex: ".*#{obj[key] or ''}.*"
+          $options: 'i'
+      else if key.indexOf('$') is 0
         output[key] = {}
         walk obj[key], route, output[key]
       else if Object.prototype.toString.call(obj[key]) is '[object Object]'
