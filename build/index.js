@@ -108,7 +108,7 @@
       return this;
     },
     start: function() {
-      MongoClient.connect(settings.MONGO_URL, function(err, db) {
+      MongoClient.connect(settings.MONGO_URL, settings.MONGO_OPTIONS, function(err, db) {
         if (err) {
           throw err;
         }

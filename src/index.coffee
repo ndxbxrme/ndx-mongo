@@ -66,7 +66,7 @@ module.exports =
       settings[keyU] = config[key] or config[keyU] or settings[keyU]
     @
   start: ->
-    MongoClient.connect settings.MONGO_URL, (err, db) ->
+    MongoClient.connect settings.MONGO_URL, settings.MONGO_OPTIONS, (err, db) ->
       if err
         throw err
       database = db
