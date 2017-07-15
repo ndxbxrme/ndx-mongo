@@ -1,8 +1,10 @@
 (function() {
   'use strict';
-  var MongoClient, async, asyncCallback, callbacks, cleanObj, convertWhere, database, maintenanceMode, ndx, objtrans, s, settings, syncCallback, version;
+  var MongoClient, ObjectId, async, asyncCallback, callbacks, cleanObj, convertWhere, database, maintenanceMode, ndx, objtrans, s, settings, syncCallback, version;
 
   MongoClient = require('mongodb').MongoClient;
+
+  ObjectId = require('mongodb').ObjectId;
 
   async = require('async');
 
@@ -75,7 +77,7 @@
     var output, walk;
     output = {};
     walk = function(obj, route, output) {
-      var key, results1;
+      var key, outkey, results1;
       results1 = [];
       for (key in obj) {
         if (key === '$like') {
@@ -89,7 +91,8 @@
         } else if (Object.prototype.toString.call(obj[key]) === '[object Object]') {
           results1.push(walk(obj[key], route + ("." + key), output));
         } else {
-          results1.push(output[(route + ("." + key)).replace(/^\./, '')] = obj[key]);
+          outkey = (route + ("." + key)).replace(/^\./, '');
+          results1.push(output[outkey] = outkey === '_id' ? new ObjectId(obj[key]) : obj[key]);
         }
       }
       return results1;

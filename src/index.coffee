@@ -2,6 +2,8 @@
 
 MongoClient = require 'mongodb'
 .MongoClient
+ObjectId = require 'mongodb'
+.ObjectId
 async = require 'async'
 objtrans = require 'objtrans'
 settings = require './settings'
@@ -56,7 +58,8 @@ convertWhere = (obj) ->
       else if Object.prototype.toString.call(obj[key]) is '[object Object]'
         walk obj[key], route + ".#{key}", output
       else
-        output[(route + ".#{key}").replace(/^\./, '')] = obj[key]
+        outkey = (route + ".#{key}").replace(/^\./, '')
+        output[outkey] = if outkey is '_id' then new ObjectId(obj[key]) else obj[key]
   walk obj, '', output
   output
 module.exports =
