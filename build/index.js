@@ -88,11 +88,11 @@
         } else if (key.indexOf('$') === 0) {
           output[key] = {};
           results1.push(walk(obj[key], route, output[key]));
-        } else if (Object.prototype.toString.call(obj[key]) === '[object Object]') {
+        } else if (Object.prototype.toString.call(obj[key]) === '[object Object]' && !obj[key]._bsontype) {
           results1.push(walk(obj[key], route + ("." + key), output));
         } else {
           outkey = (route + ("." + key)).replace(/^\./, '');
-          results1.push(output[outkey] = outkey === '_id' ? new ObjectId(obj[key]) : obj[key]);
+          results1.push(output[outkey] = outkey === '_id' && !obj[key]._bsontype ? new ObjectId(obj[key]) : obj[key]);
         }
       }
       return results1;
@@ -183,7 +183,7 @@
       cleanObj(obj);
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreUpdate' : 'preUpdate'), {
-          id: getId(obj),
+          id: obj._id,
           table: table,
           obj: obj,
           where: whereObj,
@@ -195,9 +195,17 @@
           }
           ndx.user = user;
           collection = database.collection(table);
+          delete obj._id;
           return collection.updateOne(whereObj, {
             $set: obj
           }, function(err, result) {
+            asyncCallback((isServer ? 'serverUpdate' : 'update'), {
+              id: obj._id,
+              table: table,
+              obj: obj,
+              user: ndx.user,
+              isServer: isServer
+            });
             return typeof cb === "function" ? cb() : void 0;
           });
         });
@@ -219,10 +227,28 @@
           collection = database.collection(table);
           if (Object.prototype.toString.call(obj) === '[object Array]') {
             return collection.insertMany(obj, function(err, r) {
+              var i, len, o;
+              for (i = 0, len = obj.length; i < len; i++) {
+                o = obj[i];
+                asyncCallback((isServer ? 'serverInsert' : 'insert'), {
+                  id: o._id,
+                  table: table,
+                  obj: o,
+                  user: ndx.user,
+                  isServer: isServer
+                });
+              }
               return typeof cb === "function" ? cb([]) : void 0;
             });
           } else {
             return collection.insertOne(obj, function(err, r) {
+              asyncCallback((isServer ? 'serverInsert' : 'insert'), {
+                id: obj._id,
+                table: table,
+                obj: obj,
+                user: ndx.user,
+                isServer: isServer
+              });
               return typeof cb === "function" ? cb([]) : void 0;
             });
           }
@@ -230,18 +256,11 @@
       })(ndx.user);
     },
     upsert: function(table, obj, whereObj, cb, isServer) {
-      var collection;
-      whereObj = convertWhere(whereObj);
-      collection = database.collection(table);
-      return collection.findOne(whereObj, (function(_this) {
-        return function(err, result) {
-          if (!err && result) {
-            return _this.update(table, obj, whereObj, cb, isServer);
-          } else {
-            return _this.insert(table, obj, cb, isServer);
-          }
-        };
-      })(this));
+      if (JSON.stringify(whereObj) !== '{}') {
+        return this.update(table, obj, whereObj, cb, isServer);
+      } else {
+        return this.insert(table, obj, cb, isServer);
+      }
     },
     "delete": function(table, whereObj, cb, isServer) {
       whereObj = convertWhere(whereObj);
@@ -260,6 +279,11 @@
           ndx.user = user;
           collection = database.collection(table);
           return collection.deleteMany(whereObj, null, function() {
+            asyncCallback((isServer ? 'serverDelete' : 'delete'), {
+              table: table,
+              user: ndx.user,
+              isServer: isServer
+            });
             return typeof cb === "function" ? cb() : void 0;
           });
         });

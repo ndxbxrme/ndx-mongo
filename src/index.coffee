@@ -55,11 +55,11 @@ convertWhere = (obj) ->
       else if key.indexOf('$') is 0
         output[key] = {}
         walk obj[key], route, output[key]
-      else if Object.prototype.toString.call(obj[key]) is '[object Object]'
+      else if Object.prototype.toString.call(obj[key]) is '[object Object]' and not obj[key]._bsontype
         walk obj[key], route + ".#{key}", output
       else
         outkey = (route + ".#{key}").replace(/^\./, '')
-        output[outkey] = if outkey is '_id' then new ObjectId(obj[key]) else obj[key]
+        output[outkey] = if outkey is '_id' and not obj[key]._bsontype then (new ObjectId(obj[key])) else obj[key]
   walk obj, '', output
   output
 module.exports =
@@ -126,7 +126,7 @@ module.exports =
     cleanObj obj
     ((user) ->
       asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
-        id: getId obj
+        id: obj._id
         table: table
         obj: obj
         where: whereObj
@@ -136,9 +136,16 @@ module.exports =
           return cb? []
         ndx.user = user
         collection = database.collection table
+        delete obj._id
         collection.updateOne whereObj,
           $set: obj
         , (err, result) ->
+          asyncCallback (if isServer then 'serverUpdate' else 'update'),
+            id: obj._id
+            table: table
+            obj: obj
+            user: ndx.user
+            isServer: isServer
           cb?()
     )(ndx.user)
   insert: (table, obj, cb, isServer) ->
@@ -155,19 +162,29 @@ module.exports =
         collection = database.collection table
         if Object.prototype.toString.call(obj) is '[object Array]'
           collection.insertMany obj, (err, r) ->
+            for o in obj
+              asyncCallback (if isServer then 'serverInsert' else 'insert'),
+                id: o._id
+                table: table
+                obj: o
+                user: ndx.user
+                isServer: isServer
             cb? []
         else
           collection.insertOne obj, (err, r) ->
+            asyncCallback (if isServer then 'serverInsert' else 'insert'),
+              id: obj._id
+              table: table
+              obj: obj
+              user: ndx.user
+              isServer: isServer
             cb? []
     )(ndx.user)
   upsert: (table, obj, whereObj, cb, isServer) ->
-    whereObj = convertWhere whereObj
-    collection = database.collection table
-    collection.findOne whereObj, (err, result) =>
-      if not err and result
-        @update table, obj, whereObj, cb, isServer
-      else
-        @insert table, obj, cb, isServer
+    if JSON.stringify(whereObj) isnt '{}'
+      @update table, obj, whereObj, cb, isServer
+    else
+      @insert table, obj, cb, isServer
   delete: (table, whereObj, cb, isServer) ->
     whereObj = convertWhere whereObj
     ((user) ->
@@ -181,6 +198,10 @@ module.exports =
         ndx.user = user
         collection = database.collection table
         collection.deleteMany whereObj, null, ->
+          asyncCallback (if isServer then 'serverDelete' else 'delete'), 
+            table: table
+            user: ndx.user
+            isServer: isServer
           cb?()
     )(ndx.user) 
   maintenanceOn: ->
