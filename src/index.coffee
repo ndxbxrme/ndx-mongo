@@ -69,12 +69,13 @@ module.exports =
       settings[keyU] = config[key] or config[keyU] or settings[keyU]
     @
   start: ->
-    MongoClient.connect settings.MONGO_URL, settings.MONGO_OPTIONS, (err, db) ->
-      if err
-        throw err
-      database = db
-      console.log "ndx-mongo v#{version} ready"
-      syncCallback 'ready', database
+    if settings.MONGO_URL
+      MongoClient.connect settings.MONGO_URL, settings.MONGO_OPTIONS, (err, db) ->
+        if err
+          throw err
+        database = db
+        console.log "ndx-mongo v#{version} ready"
+        syncCallback 'ready', database
     @
   on: (name, callback) ->
     callbacks[name].push callback
@@ -224,3 +225,5 @@ module.exports =
         slug = slug + Math.floor(Math.random() * 9999)
       data.slug = slug
       cb? true
+  fieldFromTemplate: (template, data, fieldName) ->
+    data[fieldName] = ndx.fillTemplate template, data

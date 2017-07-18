@@ -111,14 +111,16 @@
       return this;
     },
     start: function() {
-      MongoClient.connect(settings.MONGO_URL, settings.MONGO_OPTIONS, function(err, db) {
-        if (err) {
-          throw err;
-        }
-        database = db;
-        console.log("ndx-mongo v" + version + " ready");
-        return syncCallback('ready', database);
-      });
+      if (settings.MONGO_URL) {
+        MongoClient.connect(settings.MONGO_URL, settings.MONGO_OPTIONS, function(err, db) {
+          if (err) {
+            throw err;
+          }
+          database = db;
+          console.log("ndx-mongo v" + version + " ready");
+          return syncCallback('ready', database);
+        });
+      }
       return this;
     },
     on: function(name, callback) {
@@ -317,6 +319,9 @@
         data.slug = slug;
         return typeof cb === "function" ? cb(true) : void 0;
       });
+    },
+    fieldFromTemplate: function(template, data, fieldName) {
+      return data[fieldName] = ndx.fillTemplate(template, data);
     }
   };
 
