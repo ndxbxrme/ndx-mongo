@@ -180,7 +180,6 @@
           }
           where = args.where ? args.where : args;
           where = convertWhere(where);
-          console.log(where);
           return collection.find(where, options).sort(sort).toArray(myCb);
         });
       })(ndx.user);

@@ -124,7 +124,6 @@ module.exports =
           sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
         where = if args.where then args.where else args
         where = convertWhere where
-        console.log where
         collection.find where, options
         .sort sort
         .toArray myCb        
