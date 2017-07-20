@@ -77,17 +77,23 @@
     var output, walk;
     output = {};
     walk = function(obj, route, output) {
-      var key, outkey, results1;
+      var key, myroute, outkey, results1;
       results1 = [];
       for (key in obj) {
         if (key === '$like') {
-          results1.push(output[route] = {
+          results1.push(output[route.replace(/^\./, '')] = {
             $regex: ".*" + (obj[key] || '') + ".*",
             $options: 'i'
           });
         } else if (key.indexOf('$') === 0) {
-          output[key] = {};
-          results1.push(walk(obj[key], route, output[key]));
+          myroute = route.replace(/^\./, '');
+          output[myroute] = {};
+          output[myroute][key] = {};
+          if (Object.prototype.toString.call(obj[key]) === '[object Object]') {
+            results1.push(walk(obj[key], myroute, output[myroute]));
+          } else {
+            results1.push(output[myroute][key] = obj[key]);
+          }
         } else if (Object.prototype.toString.call(obj[key]) === '[object Object]' && !obj[key]._bsontype) {
           results1.push(walk(obj[key], route + ("." + key), output));
         } else {
@@ -138,13 +144,14 @@
           args: args,
           user: user
         }, function(result) {
-          var collection, myCb, options, where;
+          var collection, myCb, options, sort, where;
           if (!result) {
             return typeof cb === "function" ? cb([], 0) : void 0;
           }
           args = args || {};
           ndx.user = user;
           myCb = function(err, output) {
+            ndx.user = user;
             if (err) {
               return typeof cb === "function" ? cb([], 0) : void 0;
             }
@@ -155,6 +162,7 @@
               user: user
             }, function() {
               var total;
+              ndx.user = user;
               total = output.length;
               if (args.page || args.pageSize) {
                 args.page = args.page || 1;
@@ -166,9 +174,14 @@
           };
           collection = database.collection(table);
           options = {};
+          sort = {};
+          if (args.sort) {
+            sort[args.sort] = args.sortDir === 'DESC' ? -1 : 1;
+          }
           where = args.where ? args.where : args;
           where = convertWhere(where);
-          return collection.find(where, options).toArray(myCb);
+          console.log(where);
+          return collection.find(where, options).sort(sort).toArray(myCb);
         });
       })(ndx.user);
     },
@@ -201,11 +214,12 @@
           return collection.updateOne(whereObj, {
             $set: obj
           }, function(err, result) {
+            ndx.user = user;
             asyncCallback((isServer ? 'serverUpdate' : 'update'), {
               id: obj._id,
               table: table,
               obj: obj,
-              user: ndx.user,
+              user: user,
               isServer: isServer
             });
             return typeof cb === "function" ? cb() : void 0;
@@ -216,6 +230,7 @@
     insert: function(table, obj, cb, isServer) {
       cleanObj(obj);
       return (function(user) {
+        ndx.user = user;
         return asyncCallback((isServer ? 'serverPreInsert' : 'preInsert'), {
           table: table,
           obj: obj,
@@ -230,13 +245,14 @@
           if (Object.prototype.toString.call(obj) === '[object Array]') {
             return collection.insertMany(obj, function(err, r) {
               var i, len, o;
+              ndx.user = user;
               for (i = 0, len = obj.length; i < len; i++) {
                 o = obj[i];
                 asyncCallback((isServer ? 'serverInsert' : 'insert'), {
                   id: o._id,
                   table: table,
                   obj: o,
-                  user: ndx.user,
+                  user: user,
                   isServer: isServer
                 });
               }
@@ -244,11 +260,12 @@
             });
           } else {
             return collection.insertOne(obj, function(err, r) {
+              ndx.user = user;
               asyncCallback((isServer ? 'serverInsert' : 'insert'), {
                 id: obj._id,
                 table: table,
                 obj: obj,
-                user: ndx.user,
+                user: user,
                 isServer: isServer
               });
               return typeof cb === "function" ? cb([]) : void 0;
@@ -308,14 +325,26 @@
       return this;
     },
     makeSlug: function(table, template, data, cb) {
-      var slug;
+      var outSlug, slug, testSlug;
       slug = s(ndx.fillTemplate(template, data)).prune(30, '').slugify().value();
-      return this.select(table, {
-        slug: slug
-      }, function(results) {
-        if (results.length) {
-          slug = slug + Math.floor(Math.random() * 9999);
-        }
+      testSlug = slug;
+      outSlug = null;
+      return async.whilst(function() {
+        return outSlug === null;
+      }, (function(_this) {
+        return function(callback) {
+          return _this.select(table, {
+            slug: testSlug
+          }, function(results) {
+            if (results && results.length) {
+              testSlug = slug + '-' + Math.floor(Math.random() * 9999);
+            } else {
+              outSlug = testSlug;
+            }
+            return callback(null, outSlug);
+          });
+        };
+      })(this), function(err, slug) {
         data.slug = slug;
         return typeof cb === "function" ? cb(true) : void 0;
       });

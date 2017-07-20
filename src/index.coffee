@@ -49,12 +49,17 @@ convertWhere = (obj) ->
   walk = (obj, route, output) ->
     for key of obj
       if key is '$like'
-        output[route] =
+        output[route.replace(/^\./, '')] =
           $regex: ".*#{obj[key] or ''}.*"
           $options: 'i'
       else if key.indexOf('$') is 0
-        output[key] = {}
-        walk obj[key], route, output[key]
+        myroute = route.replace(/^\./, '')
+        output[myroute] = {}
+        output[myroute][key] = {}
+        if Object.prototype.toString.call(obj[key]) is '[object Object]'
+          walk obj[key], myroute, output[myroute]
+        else
+          output[myroute][key] = obj[key]
       else if Object.prototype.toString.call(obj[key]) is '[object Object]' and not obj[key]._bsontype
         walk obj[key], route + ".#{key}", output
       else
@@ -96,6 +101,7 @@ module.exports =
         args = args or {}
         ndx.user = user
         myCb = (err, output) ->
+          ndx.user = user
           if err
             return cb? [], 0
           asyncCallback (if isServer then 'serverSelect' else 'select'), 
@@ -104,6 +110,7 @@ module.exports =
             isServer: isServer
             user: user
           , ->
+            ndx.user = user
             total = output.length
             if args.page or args.pageSize
               args.page = args.page or 1
@@ -112,9 +119,14 @@ module.exports =
             cb? output, total
         collection = database.collection table
         options = {}
+        sort = {}
+        if args.sort
+          sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
         where = if args.where then args.where else args
         where = convertWhere where
+        console.log where
         collection.find where, options
+        .sort sort
         .toArray myCb        
     )(ndx.user)
   count: (table, whereObj, cb) ->
@@ -141,17 +153,19 @@ module.exports =
         collection.updateOne whereObj,
           $set: obj
         , (err, result) ->
+          ndx.user = user
           asyncCallback (if isServer then 'serverUpdate' else 'update'),
             id: obj._id
             table: table
             obj: obj
-            user: ndx.user
+            user: user
             isServer: isServer
           cb?()
     )(ndx.user)
   insert: (table, obj, cb, isServer) ->
     cleanObj obj
     ((user) ->
+      ndx.user = user
       asyncCallback (if isServer then 'serverPreInsert' else 'preInsert'),
         table: table
         obj: obj
@@ -163,21 +177,23 @@ module.exports =
         collection = database.collection table
         if Object.prototype.toString.call(obj) is '[object Array]'
           collection.insertMany obj, (err, r) ->
+            ndx.user = user
             for o in obj
               asyncCallback (if isServer then 'serverInsert' else 'insert'),
                 id: o._id
                 table: table
                 obj: o
-                user: ndx.user
+                user: user
                 isServer: isServer
             cb? []
         else
           collection.insertOne obj, (err, r) ->
+            ndx.user = user
             asyncCallback (if isServer then 'serverInsert' else 'insert'),
               id: obj._id
               table: table
               obj: obj
-              user: ndx.user
+              user: user
               isServer: isServer
             cb? []
     )(ndx.user)
@@ -218,11 +234,20 @@ module.exports =
     @
   makeSlug: (table, template, data, cb) ->
     slug = s(ndx.fillTemplate(template, data)).prune(30, '').slugify().value()
-    @select table,
-      slug: slug
-    , (results) ->
-      if results.length
-        slug = slug + Math.floor(Math.random() * 9999)
+    testSlug = slug
+    outSlug = null
+    async.whilst ->
+      outSlug is null
+    , (callback) =>
+      @select table,
+        slug: testSlug
+      , (results) ->
+        if results and results.length
+          testSlug = slug + '-' + Math.floor(Math.random() * 9999)
+        else
+          outSlug = testSlug
+        callback null, outSlug
+    , (err, slug) ->
       data.slug = slug
       cb? true
   fieldFromTemplate: (template, data, fieldName) ->
