@@ -44,29 +44,41 @@ cleanObj = (obj) ->
     if key.indexOf('$') is 0
       delete obj[key]
   return
-convertWhere = (obj) ->
-  output = {}
-  walk = (obj, route, output) ->
-    for key of obj
-      if key is '$like'
-        output[route.replace(/^\./, '')] =
-          $regex: ".*#{obj[key] or ''}.*"
-          $options: 'i'
-      else if key.indexOf('$') is 0
-        myroute = route.replace(/^\./, '')
-        output[myroute] = {}
-        output[myroute][key] = {}
-        if Object.prototype.toString.call(obj[key]) is '[object Object]'
-          walk obj[key], myroute, output[myroute]
+convertWhere = (where) ->
+  walk = (base, current, route) ->
+    if current and current.hasOwnProperty('$like')
+      current.$regex = ".*#{current.$like or ''}.*"
+      current.$options = 'i'
+      delete current.$like
+    for key of current
+      obj = current[key]
+      type = Object.prototype.toString.call obj
+      if type is '[object Object]'
+        if key.indexOf('$') is 0
+          walk obj, obj, ''
         else
-          output[myroute][key] = obj[key]
-      else if Object.prototype.toString.call(obj[key]) is '[object Object]' and not obj[key]._bsontype
-        walk obj[key], route + ".#{key}", output
+          newroute = route
+          if newroute
+            newroute += '.'
+          newroute += key
+          walk current, obj, newroute
+      else if type is '[object Array]'
+        if obj.length and Object.prototype.toString.call(obj[0]) is '[object Object]'
+          for item in obj
+            item = walk item, item, ''
       else
-        outkey = (route + ".#{key}").replace(/^\./, '')
-        output[outkey] = if outkey is '_id' and not obj[key]._bsontype then (new ObjectId(obj[key])) else obj[key]
-  walk obj, '', output
-  output
+        if key.indexOf('$') is 0
+          base[route][key] = obj
+        else if route
+          newroute = route + '.' + key
+          base[newroute] = obj
+          delete base[newroute.split(/\./g)[0]]
+        else
+          if key is '_id'
+            obj = new ObjectId obj
+          base[key] = obj
+  walk where, where, ''
+  where
 module.exports =
   config: (config) ->
     for key of config

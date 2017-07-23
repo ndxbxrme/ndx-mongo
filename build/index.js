@@ -73,38 +73,63 @@
     }
   };
 
-  convertWhere = function(obj) {
-    var output, walk;
-    output = {};
-    walk = function(obj, route, output) {
-      var key, myroute, outkey, results1;
+  convertWhere = function(where) {
+    var walk;
+    walk = function(base, current, route) {
+      var item, key, newroute, obj, results1, type;
+      if (current && current.hasOwnProperty('$like')) {
+        current.$regex = ".*" + (current.$like || '') + ".*";
+        current.$options = 'i';
+        delete current.$like;
+      }
       results1 = [];
-      for (key in obj) {
-        if (key === '$like') {
-          results1.push(output[route.replace(/^\./, '')] = {
-            $regex: ".*" + (obj[key] || '') + ".*",
-            $options: 'i'
-          });
-        } else if (key.indexOf('$') === 0) {
-          myroute = route.replace(/^\./, '');
-          output[myroute] = {};
-          output[myroute][key] = {};
-          if (Object.prototype.toString.call(obj[key]) === '[object Object]') {
-            results1.push(walk(obj[key], myroute, output[myroute]));
+      for (key in current) {
+        obj = current[key];
+        type = Object.prototype.toString.call(obj);
+        if (type === '[object Object]') {
+          if (key.indexOf('$') === 0) {
+            results1.push(walk(obj, obj, ''));
           } else {
-            results1.push(output[myroute][key] = obj[key]);
+            newroute = route;
+            if (newroute) {
+              newroute += '.';
+            }
+            newroute += key;
+            results1.push(walk(current, obj, newroute));
           }
-        } else if (Object.prototype.toString.call(obj[key]) === '[object Object]' && !obj[key]._bsontype) {
-          results1.push(walk(obj[key], route + ("." + key), output));
+        } else if (type === '[object Array]') {
+          if (obj.length && Object.prototype.toString.call(obj[0]) === '[object Object]') {
+            results1.push((function() {
+              var i, len, results2;
+              results2 = [];
+              for (i = 0, len = obj.length; i < len; i++) {
+                item = obj[i];
+                results2.push(item = walk(item, item, ''));
+              }
+              return results2;
+            })());
+          } else {
+            results1.push(void 0);
+          }
         } else {
-          outkey = (route + ("." + key)).replace(/^\./, '');
-          results1.push(output[outkey] = outkey === '_id' && !obj[key]._bsontype ? new ObjectId(obj[key]) : obj[key]);
+          if (key.indexOf('$') === 0) {
+            results1.push(base[route][key] = obj);
+          } else if (route) {
+            newroute = route + '.' + key;
+            base[newroute] = obj;
+            results1.push(delete base[newroute.split(/\./g)[0]]);
+          } else {
+            if (key === '_id') {
+              obj = new ObjectId(obj);
+            }
+            results1.push(base[key] = obj);
+          }
         }
       }
       return results1;
     };
-    walk(obj, '', output);
-    return output;
+    walk(where, where, '');
+    return where;
   };
 
   module.exports = {
