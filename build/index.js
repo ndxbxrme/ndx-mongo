@@ -351,6 +351,9 @@
     makeSlug: function(table, template, data, cb) {
       var outSlug, slug, testSlug;
       slug = s(ndx.fillTemplate(template, data)).prune(30, '').slugify().value();
+      if (data.slug && data.slug.indexOf(slug) === 0) {
+        return cb(true);
+      }
       testSlug = slug;
       outSlug = null;
       return async.whilst(function() {

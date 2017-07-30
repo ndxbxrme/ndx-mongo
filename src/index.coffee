@@ -245,6 +245,8 @@ module.exports =
     @
   makeSlug: (table, template, data, cb) ->
     slug = s(ndx.fillTemplate(template, data)).prune(30, '').slugify().value()
+    if data.slug and data.slug.indexOf(slug) is 0
+      return cb true
     testSlug = slug
     outSlug = null
     async.whilst ->
