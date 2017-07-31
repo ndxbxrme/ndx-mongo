@@ -78,6 +78,7 @@ convertWhere = (where) ->
             obj = new ObjectId obj
           base[key] = obj
   walk where, where, ''
+  delete where['#']
   where
 module.exports =
   config: (config) ->

@@ -129,6 +129,7 @@
       return results1;
     };
     walk(where, where, '');
+    delete where['#'];
     return where;
   };
 
