@@ -148,10 +148,11 @@ module.exports =
       cb? count
   update:  (table, obj, whereObj, cb, isServer) ->
     whereObj = convertWhere whereObj
-    cleanObj obj
+    console.log 'WHERE', whereObj
+    cleanObj obj 
     ((user) ->
       asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
-        id: obj._id
+        id: obj._id or whereObj._id
         table: table
         obj: obj
         where: whereObj
@@ -161,13 +162,14 @@ module.exports =
           return cb? []
         ndx.user = user
         collection = database.collection table
+        id = obj._id
         delete obj._id
         collection.updateOne whereObj,
           $set: obj
         , (err, result) ->
           ndx.user = user
           asyncCallback (if isServer then 'serverUpdate' else 'update'),
-            id: obj._id
+            id: id
             table: table
             obj: obj
             user: user

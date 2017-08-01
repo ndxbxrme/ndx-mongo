@@ -220,28 +220,30 @@
     },
     update: function(table, obj, whereObj, cb, isServer) {
       whereObj = convertWhere(whereObj);
+      console.log('WHERE', whereObj);
       cleanObj(obj);
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreUpdate' : 'preUpdate'), {
-          id: obj._id,
+          id: obj._id || whereObj._id,
           table: table,
           obj: obj,
           where: whereObj,
           user: user
         }, function(result) {
-          var collection;
+          var collection, id;
           if (!result) {
             return typeof cb === "function" ? cb([]) : void 0;
           }
           ndx.user = user;
           collection = database.collection(table);
+          id = obj._id;
           delete obj._id;
           return collection.updateOne(whereObj, {
             $set: obj
           }, function(err, result) {
             ndx.user = user;
             asyncCallback((isServer ? 'serverUpdate' : 'update'), {
-              id: obj._id,
+              id: id,
               table: table,
               obj: obj,
               user: user,
