@@ -220,7 +220,6 @@
     },
     update: function(table, obj, whereObj, cb, isServer) {
       whereObj = convertWhere(whereObj);
-      console.log('WHERE', whereObj);
       cleanObj(obj);
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreUpdate' : 'preUpdate'), {

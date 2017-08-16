@@ -148,7 +148,6 @@ module.exports =
       cb? count
   update:  (table, obj, whereObj, cb, isServer) ->
     whereObj = convertWhere whereObj
-    console.log 'WHERE', whereObj
     cleanObj obj 
     ((user) ->
       asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
