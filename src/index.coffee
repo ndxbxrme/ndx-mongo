@@ -137,6 +137,7 @@ module.exports =
           sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
         where = if args.where then args.where else args
         where = convertWhere where
+        console.log 'where', where
         collection.find where, options
         .sort sort
         .toArray myCb        
@@ -163,6 +164,7 @@ module.exports =
         collection = database.collection table
         id = obj._id
         delete obj._id
+        #console.log 'update where\n', whereObj
         collection.updateOne whereObj,
           $set: obj
         , (err, result) ->
@@ -173,7 +175,9 @@ module.exports =
             obj: obj
             user: user
             isServer: isServer
-          cb?()
+          cb? err, 
+            op: 'update'
+            id: result.insertedId
     )(ndx.user)
   insert: (table, obj, cb, isServer) ->
     cleanObj obj
@@ -198,7 +202,9 @@ module.exports =
                 obj: o
                 user: user
                 isServer: isServer
-            cb? []
+            cb? err, 
+              op: 'insert'
+              id: r.insertedId
         else
           collection.insertOne obj, (err, r) ->
             ndx.user = user
@@ -208,7 +214,9 @@ module.exports =
               obj: obj
               user: user
               isServer: isServer
-            cb? []
+            cb? err, 
+              op: 'insert'
+              id: r.insertedId
     )(ndx.user)
   upsert: (table, obj, whereObj, cb, isServer) ->
     if JSON.stringify(whereObj) isnt '{}'
