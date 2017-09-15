@@ -206,7 +206,6 @@
           }
           where = args.where ? args.where : args;
           where = convertWhere(where);
-          console.log('where', where);
           return collection.find(where, options).sort(sort).toArray(myCb);
         });
       })(ndx.user);
@@ -236,7 +235,7 @@
           }
           ndx.user = user;
           collection = database.collection(table);
-          id = obj._id;
+          id = obj._id || whereObj._id;
           delete obj._id;
           return collection.updateOne(whereObj, {
             $set: obj
