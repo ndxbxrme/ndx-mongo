@@ -238,7 +238,6 @@ module.exports =
         collection = database.collection table
         id = obj._id or whereObj._id
         delete obj._id
-        #console.log 'update where\n', whereObj
         collection.updateOne whereObj,
           $set: if useEncryption then encryptObj(Object.assign({},obj), table) else obj
         , (err, result) ->
