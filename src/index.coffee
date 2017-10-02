@@ -5,6 +5,9 @@ MongoClient = require 'mongodb'
 ObjectId = require 'mongodb'
 .ObjectId
 async = require 'async'
+minimatch = require 'minimatch'
+crypto = require 'crypto'
+algorithm = 'aes-256-ctr'
 objtrans = require 'objtrans'
 settings = require './settings'
 s = require('underscore.string')
@@ -12,6 +15,8 @@ version = require('../package.json').version
 database = null
 ndx = {}
 maintenanceMode = false
+useEncryption = false
+encryptIgnore = ['**._id']
 callbacks =
   ready: []
   insert: []
@@ -22,6 +27,7 @@ callbacks =
   preUpdate: []
   preSelect: []
   preDelete: []
+  selectTransform: []
   restore: []
 syncCallback = (name, obj, cb) ->
   if callbacks[name] and callbacks[name].length
@@ -39,6 +45,56 @@ asyncCallback = (name, obj, cb) ->
       cb? truth
   else
     cb? true
+encryptString = (str) ->
+  if str
+    encrypt = crypto.createCipher algorithm, settings.ENCRYPTION_KEY or settings.SESSION_SECRET
+    output = encrypt.update str, 'binary', 'binary'
+    output += encrypt.final 'binary'
+    output
+decryptString = (str) ->
+  if str
+    decrypt = crypto.createDecipher algorithm, settings.ENCRYPTION_KEY or settings.SESSION_SECRET
+    output = decrypt.update str, 'binary', 'binary'
+    output += decrypt.final 'binary'
+    output
+encryptObj = (obj, path) ->
+  for ignore in encryptIgnore
+    if minimatch path, ignore
+      return obj
+  type = Object.prototype.toString.call obj
+  if type is '[object Object]'
+    for key of obj
+      obj[key] = encryptObj obj[key], "#{path}.#{key}"
+  else
+    return encryptString JSON.stringify obj
+  obj
+decryptObj = (obj, path) ->
+  for ignore in encryptIgnore
+    if minimatch path, ignore
+      return obj
+  type = Object.prototype.toString.call obj
+  if type is '[object Object]'
+    for key of obj
+      obj[key] = decryptObj obj[key], "#{path}.#{key}"
+  else
+    if not obj
+      return obj
+    return JSON.parse decryptString obj
+  obj
+encryptWhere = (obj, path) ->
+  type = Object.prototype.toString.call obj
+  for ignore in encryptIgnore
+    if minimatch path, ignore
+      return obj
+  if type is '[object Object]'
+    for key of obj
+      mypath = path
+      if key.indexOf('$') isnt 0
+        mypath = "#{path}.#{key}"
+      obj[key] = encryptWhere obj[key], mypath
+  else
+    return encryptString JSON.stringify obj
+  obj
 cleanObj = (obj) ->
   for key of obj
     if key.indexOf('$') is 0 or key is '#'
@@ -85,6 +141,11 @@ module.exports =
     for key of config
       keyU = s(key).underscored().value().toUpperCase()
       settings[keyU] = config[key] or config[keyU] or settings[keyU]
+    if settings.ENCRYPT_IGNORE
+      encryptIgnore = settings.ENCRYPT_IGNORE
+    if settings.ENCRYPT_MONGO
+      useEncryption = true
+    settings.ENCRYPTION_KEY = settings.ENCRYPTION_KEY or process.env.ENCRYPTION_KEY
     @
   start: ->
     if settings.MONGO_URL
@@ -129,7 +190,17 @@ module.exports =
               args.page = args.page or 1
               args.pageSize = args.pageSize or 10
               output = output.splice (args.page - 1) * args.pageSize, args.pageSize
-            cb? output, total
+            if useEncryption
+              for obj in output
+                obj = decryptObj obj, table
+            asyncCallback (if isServer then 'serverSelectTransform' else 'selectTransform'),
+              table: table
+              objs: output
+              isServer: isServer
+              user: user
+            , ->
+              ndx.user = user
+              cb? output, total
         collection = database.collection table
         options = {}
         sort = {}
@@ -137,6 +208,8 @@ module.exports =
           sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
         where = if args.where then args.where else args
         where = convertWhere where
+        if useEncryption
+          where = encryptWhere where, table
         collection.find where, options
         .sort sort
         .toArray myCb        
@@ -148,6 +221,8 @@ module.exports =
       cb? count
   update:  (table, obj, whereObj, cb, isServer) ->
     whereObj = convertWhere whereObj
+    if useEncryption
+      where = encryptWhere where, table
     cleanObj obj 
     ((user) ->
       asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
@@ -165,7 +240,7 @@ module.exports =
         delete obj._id
         #console.log 'update where\n', whereObj
         collection.updateOne whereObj,
-          $set: obj
+          $set: if useEncryption then encryptObj(Object.assign({},obj), table) else obj
         , (err, result) ->
           ndx.user = user
           asyncCallback (if isServer then 'serverUpdate' else 'update'),
@@ -192,21 +267,26 @@ module.exports =
         ndx.user = user
         collection = database.collection table
         if Object.prototype.toString.call(obj) is '[object Array]'
-          collection.insertMany obj, (err, r) ->
-            ndx.user = user
-            for o in obj
+          async.each obj, (o, callback) ->
+            collection.insertOne (if useEncryption then encryptObj(Object.assign({},o), table) else o)
+            , (err, r) ->
+              ndx.user = user
+              o._id = r.insertedId
               asyncCallback (if isServer then 'serverInsert' else 'insert'),
                 id: o._id
                 table: table
                 obj: o
                 user: user
                 isServer: isServer
-            cb? err, 
-              op: 'insert'
-              id: r.insertedId
+              cb? err, 
+                op: 'insert'
+                id: r.insertedId
+              callback()
         else
-          collection.insertOne obj, (err, r) ->
+          collection.insertOne (if useEncryption then encryptObj(Object.assign({},obj), table) else obj)
+          , (err, r) ->
             ndx.user = user
+            obj._id = r.insertedId
             asyncCallback (if isServer then 'serverInsert' else 'insert'),
               id: obj._id
               table: table
@@ -224,6 +304,8 @@ module.exports =
       @insert table, obj, cb, isServer
   delete: (table, whereObj, cb, isServer) ->
     whereObj = convertWhere whereObj
+    if useEncryption
+      where = encryptWhere where, table
     ((user) ->
       asyncCallback (if isServer then 'serverPreDelete' else 'preDelete'),
         table: table

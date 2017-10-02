@@ -1,12 +1,18 @@
 (function() {
   'use strict';
-  var MongoClient, ObjectId, async, asyncCallback, callbacks, cleanObj, convertWhere, database, maintenanceMode, ndx, objtrans, s, settings, syncCallback, version;
+  var MongoClient, ObjectId, algorithm, async, asyncCallback, callbacks, cleanObj, convertWhere, crypto, database, decryptObj, decryptString, encryptIgnore, encryptObj, encryptString, encryptWhere, maintenanceMode, minimatch, ndx, objtrans, s, settings, syncCallback, useEncryption, version;
 
   MongoClient = require('mongodb').MongoClient;
 
   ObjectId = require('mongodb').ObjectId;
 
   async = require('async');
+
+  minimatch = require('minimatch');
+
+  crypto = require('crypto');
+
+  algorithm = 'aes-256-ctr';
 
   objtrans = require('objtrans');
 
@@ -22,6 +28,10 @@
 
   maintenanceMode = false;
 
+  useEncryption = false;
+
+  encryptIgnore = ['**._id'];
+
   callbacks = {
     ready: [],
     insert: [],
@@ -32,6 +42,7 @@
     preUpdate: [],
     preSelect: [],
     preDelete: [],
+    selectTransform: [],
     restore: []
   };
 
@@ -62,6 +73,90 @@
     } else {
       return typeof cb === "function" ? cb(true) : void 0;
     }
+  };
+
+  encryptString = function(str) {
+    var encrypt, output;
+    if (str) {
+      encrypt = crypto.createCipher(algorithm, settings.ENCRYPTION_KEY || settings.SESSION_SECRET);
+      output = encrypt.update(str, 'binary', 'binary');
+      output += encrypt.final('binary');
+      return output;
+    }
+  };
+
+  decryptString = function(str) {
+    var decrypt, output;
+    if (str) {
+      decrypt = crypto.createDecipher(algorithm, settings.ENCRYPTION_KEY || settings.SESSION_SECRET);
+      output = decrypt.update(str, 'binary', 'binary');
+      output += decrypt.final('binary');
+      return output;
+    }
+  };
+
+  encryptObj = function(obj, path) {
+    var i, ignore, key, len, type;
+    for (i = 0, len = encryptIgnore.length; i < len; i++) {
+      ignore = encryptIgnore[i];
+      if (minimatch(path, ignore)) {
+        return obj;
+      }
+    }
+    type = Object.prototype.toString.call(obj);
+    if (type === '[object Object]') {
+      for (key in obj) {
+        obj[key] = encryptObj(obj[key], path + "." + key);
+      }
+    } else {
+      return encryptString(JSON.stringify(obj));
+    }
+    return obj;
+  };
+
+  decryptObj = function(obj, path) {
+    var i, ignore, key, len, type;
+    for (i = 0, len = encryptIgnore.length; i < len; i++) {
+      ignore = encryptIgnore[i];
+      if (minimatch(path, ignore)) {
+        return obj;
+      }
+    }
+    type = Object.prototype.toString.call(obj);
+    if (type === '[object Object]') {
+      for (key in obj) {
+        obj[key] = decryptObj(obj[key], path + "." + key);
+      }
+    } else {
+      if (!obj) {
+        return obj;
+      }
+      return JSON.parse(decryptString(obj));
+    }
+    return obj;
+  };
+
+  encryptWhere = function(obj, path) {
+    var i, ignore, key, len, mypath, type;
+    type = Object.prototype.toString.call(obj);
+    for (i = 0, len = encryptIgnore.length; i < len; i++) {
+      ignore = encryptIgnore[i];
+      if (minimatch(path, ignore)) {
+        return obj;
+      }
+    }
+    if (type === '[object Object]') {
+      for (key in obj) {
+        mypath = path;
+        if (key.indexOf('$') !== 0) {
+          mypath = path + "." + key;
+        }
+        obj[key] = encryptWhere(obj[key], mypath);
+      }
+    } else {
+      return encryptString(JSON.stringify(obj));
+    }
+    return obj;
   };
 
   cleanObj = function(obj) {
@@ -140,6 +235,13 @@
         keyU = s(key).underscored().value().toUpperCase();
         settings[keyU] = config[key] || config[keyU] || settings[keyU];
       }
+      if (settings.ENCRYPT_IGNORE) {
+        encryptIgnore = settings.ENCRYPT_IGNORE;
+      }
+      if (settings.ENCRYPT_MONGO) {
+        useEncryption = true;
+      }
+      settings.ENCRYPTION_KEY = settings.ENCRYPTION_KEY || process.env.ENCRYPTION_KEY;
       return this;
     },
     start: function() {
@@ -187,7 +289,7 @@
               isServer: isServer,
               user: user
             }, function() {
-              var total;
+              var i, len, obj, total;
               ndx.user = user;
               total = output.length;
               if (args.page || args.pageSize) {
@@ -195,7 +297,21 @@
                 args.pageSize = args.pageSize || 10;
                 output = output.splice((args.page - 1) * args.pageSize, args.pageSize);
               }
-              return typeof cb === "function" ? cb(output, total) : void 0;
+              if (useEncryption) {
+                for (i = 0, len = output.length; i < len; i++) {
+                  obj = output[i];
+                  obj = decryptObj(obj, table);
+                }
+              }
+              return asyncCallback((isServer ? 'serverSelectTransform' : 'selectTransform'), {
+                table: table,
+                objs: output,
+                isServer: isServer,
+                user: user
+              }, function() {
+                ndx.user = user;
+                return typeof cb === "function" ? cb(output, total) : void 0;
+              });
             });
           };
           collection = database.collection(table);
@@ -206,6 +322,9 @@
           }
           where = args.where ? args.where : args;
           where = convertWhere(where);
+          if (useEncryption) {
+            where = encryptWhere(where, table);
+          }
           return collection.find(where, options).sort(sort).toArray(myCb);
         });
       })(ndx.user);
@@ -219,7 +338,11 @@
       });
     },
     update: function(table, obj, whereObj, cb, isServer) {
+      var where;
       whereObj = convertWhere(whereObj);
+      if (useEncryption) {
+        where = encryptWhere(where, table);
+      }
       cleanObj(obj);
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreUpdate' : 'preUpdate'), {
@@ -238,7 +361,7 @@
           id = obj._id || whereObj._id;
           delete obj._id;
           return collection.updateOne(whereObj, {
-            $set: obj
+            $set: useEncryption ? encryptObj(Object.assign({}, obj), table) : obj
           }, function(err, result) {
             ndx.user = user;
             asyncCallback((isServer ? 'serverUpdate' : 'update'), {
@@ -272,11 +395,10 @@
           ndx.user = user;
           collection = database.collection(table);
           if (Object.prototype.toString.call(obj) === '[object Array]') {
-            return collection.insertMany(obj, function(err, r) {
-              var i, len, o;
-              ndx.user = user;
-              for (i = 0, len = obj.length; i < len; i++) {
-                o = obj[i];
+            return async.each(obj, function(o, callback) {
+              return collection.insertOne((useEncryption ? encryptObj(Object.assign({}, o), table) : o), function(err, r) {
+                ndx.user = user;
+                o._id = r.insertedId;
                 asyncCallback((isServer ? 'serverInsert' : 'insert'), {
                   id: o._id,
                   table: table,
@@ -284,15 +406,19 @@
                   user: user,
                   isServer: isServer
                 });
-              }
-              return typeof cb === "function" ? cb(err, {
-                op: 'insert',
-                id: r.insertedId
-              }) : void 0;
+                if (typeof cb === "function") {
+                  cb(err, {
+                    op: 'insert',
+                    id: r.insertedId
+                  });
+                }
+                return callback();
+              });
             });
           } else {
-            return collection.insertOne(obj, function(err, r) {
+            return collection.insertOne((useEncryption ? encryptObj(Object.assign({}, obj), table) : obj), function(err, r) {
               ndx.user = user;
+              obj._id = r.insertedId;
               asyncCallback((isServer ? 'serverInsert' : 'insert'), {
                 id: obj._id,
                 table: table,
@@ -317,7 +443,11 @@
       }
     },
     "delete": function(table, whereObj, cb, isServer) {
+      var where;
       whereObj = convertWhere(whereObj);
+      if (useEncryption) {
+        where = encryptWhere(where, table);
+      }
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreDelete' : 'preDelete'), {
           table: table,

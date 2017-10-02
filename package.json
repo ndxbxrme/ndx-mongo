@@ -1,6 +1,6 @@
 {
   "name": "ndx-mongo",
-  "version": "0.0.20",
+  "version": "0.1.0",
   "description": "Mongo database connector for ndx-framework apps",
   "main": "build/index.js",
   "scripts": {
@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "async": "^2.4.1",
+    "minimatch": "^3.0.4",
     "mongodb": "^2.2.29",
     "objtrans": "0.0.14",
     "underscore.string": "^3.3.4"
