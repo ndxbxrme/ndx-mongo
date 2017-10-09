@@ -58,16 +58,17 @@ decryptString = (str) ->
     output += decrypt.final 'binary'
     output
 encryptObj = (obj, path) ->
+  myobj = {}
   for ignore in encryptIgnore
     if minimatch path, ignore
       return obj
   type = Object.prototype.toString.call obj
   if type is '[object Object]'
     for key of obj
-      obj[key] = encryptObj obj[key], "#{path}.#{key}"
+      myobj[key] = encryptObj obj[key], "#{path}.#{key}"
   else
     return encryptString JSON.stringify obj
-  obj
+  myobj
 decryptObj = (obj, path) ->
   for ignore in encryptIgnore
     if minimatch path, ignore
@@ -239,7 +240,7 @@ module.exports =
         id = obj._id or whereObj._id
         delete obj._id
         collection.updateOne whereObj,
-          $set: if useEncryption then encryptObj(Object.assign({},obj), table) else obj
+          $set: if useEncryption then encryptObj(obj, table) else obj
         , (err, result) ->
           ndx.user = user
           asyncCallback (if isServer then 'serverUpdate' else 'update'),
@@ -267,7 +268,7 @@ module.exports =
         collection = database.collection table
         if Object.prototype.toString.call(obj) is '[object Array]'
           async.each obj, (o, callback) ->
-            collection.insertOne (if useEncryption then encryptObj(Object.assign({},o), table) else o)
+            collection.insertOne (if useEncryption then encryptObj(o, table) else o)
             , (err, r) ->
               ndx.user = user
               o._id = r.insertedId
@@ -282,7 +283,7 @@ module.exports =
                 id: r.insertedId
               callback()
         else
-          collection.insertOne (if useEncryption then encryptObj(Object.assign({},obj), table) else obj)
+          collection.insertOne (if useEncryption then encryptObj(obj, table) else obj)
           , (err, r) ->
             ndx.user = user
             obj._id = r.insertedId

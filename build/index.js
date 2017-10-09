@@ -96,7 +96,8 @@
   };
 
   encryptObj = function(obj, path) {
-    var i, ignore, key, len, type;
+    var i, ignore, key, len, myobj, type;
+    myobj = {};
     for (i = 0, len = encryptIgnore.length; i < len; i++) {
       ignore = encryptIgnore[i];
       if (minimatch(path, ignore)) {
@@ -106,12 +107,12 @@
     type = Object.prototype.toString.call(obj);
     if (type === '[object Object]') {
       for (key in obj) {
-        obj[key] = encryptObj(obj[key], path + "." + key);
+        myobj[key] = encryptObj(obj[key], path + "." + key);
       }
     } else {
       return encryptString(JSON.stringify(obj));
     }
-    return obj;
+    return myobj;
   };
 
   decryptObj = function(obj, path) {
@@ -361,7 +362,7 @@
           id = obj._id || whereObj._id;
           delete obj._id;
           return collection.updateOne(whereObj, {
-            $set: useEncryption ? encryptObj(Object.assign({}, obj), table) : obj
+            $set: useEncryption ? encryptObj(obj, table) : obj
           }, function(err, result) {
             ndx.user = user;
             asyncCallback((isServer ? 'serverUpdate' : 'update'), {
@@ -396,7 +397,7 @@
           collection = database.collection(table);
           if (Object.prototype.toString.call(obj) === '[object Array]') {
             return async.each(obj, function(o, callback) {
-              return collection.insertOne((useEncryption ? encryptObj(Object.assign({}, o), table) : o), function(err, r) {
+              return collection.insertOne((useEncryption ? encryptObj(o, table) : o), function(err, r) {
                 ndx.user = user;
                 o._id = r.insertedId;
                 asyncCallback((isServer ? 'serverInsert' : 'insert'), {
@@ -416,7 +417,7 @@
               });
             });
           } else {
-            return collection.insertOne((useEncryption ? encryptObj(Object.assign({}, obj), table) : obj), function(err, r) {
+            return collection.insertOne((useEncryption ? encryptObj(obj, table) : obj), function(err, r) {
               ndx.user = user;
               obj._id = r.insertedId;
               asyncCallback((isServer ? 'serverInsert' : 'insert'), {
