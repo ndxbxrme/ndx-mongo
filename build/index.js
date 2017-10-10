@@ -88,11 +88,9 @@
   decryptString = function(str) {
     var decrypt, output;
     if (str) {
-      console.log('decrypting:', str);
       decrypt = crypto.createDecipher(algorithm, settings.ENCRYPTION_KEY || settings.SESSION_SECRET);
       output = decrypt.update(str, 'binary', 'binary');
       output += decrypt.final('binary');
-      console.log(output);
       return output;
     }
   };
@@ -128,7 +126,6 @@
     type = Object.prototype.toString.call(obj);
     if (type === '[object Object]') {
       for (key in obj) {
-        console.log(key);
         obj[key] = decryptObj(obj[key], path + "." + key);
       }
     } else {

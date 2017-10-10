@@ -53,11 +53,9 @@ encryptString = (str) ->
     output
 decryptString = (str) ->
   if str
-    console.log 'decrypting:', str
     decrypt = crypto.createDecipher algorithm, settings.ENCRYPTION_KEY or settings.SESSION_SECRET
     output = decrypt.update str, 'binary', 'binary'
     output += decrypt.final 'binary'
-    console.log output
     output
 encryptObj = (obj, path) ->
   myobj = {}
@@ -78,7 +76,6 @@ decryptObj = (obj, path) ->
   type = Object.prototype.toString.call obj
   if type is '[object Object]'
     for key of obj
-      console.log key
       obj[key] = decryptObj obj[key], "#{path}.#{key}"
   else
     if not obj
