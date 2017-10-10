@@ -88,9 +88,11 @@
   decryptString = function(str) {
     var decrypt, output;
     if (str) {
+      console.log('decrypting:', str);
       decrypt = crypto.createDecipher(algorithm, settings.ENCRYPTION_KEY || settings.SESSION_SECRET);
       output = decrypt.update(str, 'binary', 'binary');
       output += decrypt.final('binary');
+      console.log(output);
       return output;
     }
   };
