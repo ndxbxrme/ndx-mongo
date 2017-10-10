@@ -78,6 +78,7 @@ decryptObj = (obj, path) ->
   type = Object.prototype.toString.call obj
   if type is '[object Object]'
     for key of obj
+      console.log key
       obj[key] = decryptObj obj[key], "#{path}.#{key}"
   else
     if not obj

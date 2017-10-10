@@ -128,6 +128,7 @@
     type = Object.prototype.toString.call(obj);
     if (type === '[object Object]') {
       for (key in obj) {
+        console.log(key);
         obj[key] = decryptObj(obj[key], path + "." + key);
       }
     } else {
