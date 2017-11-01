@@ -356,3 +356,4 @@ module.exports =
       cb? true
   fieldFromTemplate: (template, data, fieldName) ->
     data[fieldName] = ndx.fillTemplate template, data
+  decryptObj: decryptObj

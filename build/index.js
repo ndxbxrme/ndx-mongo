@@ -520,7 +520,8 @@
     },
     fieldFromTemplate: function(template, data, fieldName) {
       return data[fieldName] = ndx.fillTemplate(template, data);
-    }
+    },
+    decryptObj: decryptObj
   };
 
 }).call(this);
