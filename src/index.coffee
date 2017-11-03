@@ -131,7 +131,7 @@ convertWhere = (where) ->
           base[newroute] = obj
           delete base[newroute.split(/\./g)[0]]
         else
-          if key is '_id'
+          if key is '_id' or newroute is '_id'
             obj = new ObjectId obj
           base[key] = obj
   walk where, where, ''

@@ -215,7 +215,7 @@
             base[newroute] = obj;
             results1.push(delete base[newroute.split(/\./g)[0]]);
           } else {
-            if (key === '_id') {
+            if (key === '_id' || newroute === '_id') {
               obj = new ObjectId(obj);
             }
             results1.push(base[key] = obj);
