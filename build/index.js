@@ -1,6 +1,6 @@
 (function() {
   'use strict';
-  var MongoClient, ObjectId, algorithm, async, asyncCallback, callbacks, cleanObj, convertWhere, crypto, database, decryptObj, decryptString, encryptIgnore, encryptObj, encryptString, encryptWhere, maintenanceMode, minimatch, ndx, objtrans, s, settings, syncCallback, useEncryption, version;
+  var MongoClient, ObjectId, algorithm, async, asyncCallback, callbacks, cleanObj, convertWhere, crypto, cryptojs, database, decryptObj, decryptString, encryptIgnore, encryptObj, encryptString, encryptWhere, maintenanceMode, minimatch, ndx, objtrans, s, settings, syncCallback, useEncryption, version;
 
   MongoClient = require('mongodb').MongoClient;
 
@@ -11,6 +11,8 @@
   minimatch = require('minimatch');
 
   crypto = require('crypto');
+
+  cryptojs = require('crypto-js');
 
   algorithm = 'aes-256-ctr';
 
@@ -43,6 +45,7 @@
     preSelect: [],
     preDelete: [],
     selectTransform: [],
+    serverSelectTransform: [],
     restore: []
   };
 
@@ -76,23 +79,17 @@
   };
 
   encryptString = function(str) {
-    var encrypt, output;
     if (str) {
-      encrypt = crypto.createCipher(algorithm, settings.ENCRYPTION_KEY || settings.SESSION_SECRET);
-      output = encrypt.update(str, 'binary', 'binary');
-      output += encrypt.final('binary');
-      return output;
+      return cryptojs.AES.encrypt(str, settings.ENCRYPTION_KEY || settings.SESSION_SECRET).toString();
     }
+    return null;
   };
 
   decryptString = function(str) {
-    var decrypt, output;
     if (str) {
-      decrypt = crypto.createDecipher(algorithm, settings.ENCRYPTION_KEY || settings.SESSION_SECRET);
-      output = decrypt.update(str, 'binary', 'binary');
-      output += decrypt.final('binary');
-      return output;
+      return cryptojs.AES.decrypt(str, settings.ENCRYPTION_KEY || settings.SESSION_SECRET).toString(cryptojs.enc.Utf8);
     }
+    return '';
   };
 
   encryptObj = function(obj, path) {
@@ -269,6 +266,7 @@
     select: function(table, args, cb, isServer) {
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreSelect' : 'preSelect'), {
+          pre: true,
           table: table,
           args: args,
           user: user
@@ -285,6 +283,7 @@
               return typeof cb === "function" ? cb([], 0) : void 0;
             }
             return asyncCallback((isServer ? 'serverSelect' : 'select'), {
+              post: true,
               table: table,
               objs: output,
               isServer: isServer,
@@ -305,6 +304,7 @@
                 }
               }
               return asyncCallback((isServer ? 'serverSelectTransform' : 'selectTransform'), {
+                transform: true,
                 table: table,
                 objs: output,
                 isServer: isServer,
@@ -323,9 +323,6 @@
           }
           where = args.where ? args.where : args;
           where = convertWhere(where);
-          if (useEncryption) {
-            where = encryptWhere(where, table);
-          }
           return collection.find(where, options).sort(sort).toArray(myCb);
         });
       })(ndx.user);
@@ -347,6 +344,7 @@
       cleanObj(obj);
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreUpdate' : 'preUpdate'), {
+          pre: true,
           id: obj._id || whereObj._id,
           table: table,
           obj: obj,
@@ -366,6 +364,7 @@
           }, function(err, result) {
             ndx.user = user;
             asyncCallback((isServer ? 'serverUpdate' : 'update'), {
+              post: true,
               id: id,
               table: table,
               obj: obj,
@@ -385,6 +384,7 @@
       return (function(user) {
         ndx.user = user;
         return asyncCallback((isServer ? 'serverPreInsert' : 'preInsert'), {
+          pre: true,
           table: table,
           obj: obj,
           user: user
@@ -401,6 +401,7 @@
                 ndx.user = user;
                 o._id = r.insertedId;
                 asyncCallback((isServer ? 'serverInsert' : 'insert'), {
+                  post: true,
                   id: o._id,
                   table: table,
                   obj: o,
@@ -421,6 +422,7 @@
               ndx.user = user;
               obj._id = r.insertedId;
               asyncCallback((isServer ? 'serverInsert' : 'insert'), {
+                post: true,
                 id: obj._id,
                 table: table,
                 obj: obj,
@@ -451,6 +453,7 @@
       }
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreDelete' : 'preDelete'), {
+          pre: true,
           table: table,
           where: whereObj,
           user: user
@@ -465,6 +468,7 @@
           collection = database.collection(table);
           return collection.deleteMany(whereObj, null, function() {
             asyncCallback((isServer ? 'serverDelete' : 'delete'), {
+              post: true,
               table: table,
               user: ndx.user,
               isServer: isServer

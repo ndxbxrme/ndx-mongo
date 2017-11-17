@@ -7,6 +7,7 @@ ObjectId = require 'mongodb'
 async = require 'async'
 minimatch = require 'minimatch'
 crypto = require 'crypto'
+cryptojs = require 'crypto-js'
 algorithm = 'aes-256-ctr'
 objtrans = require 'objtrans'
 settings = require './settings'
@@ -28,6 +29,7 @@ callbacks =
   preSelect: []
   preDelete: []
   selectTransform: []
+  serverSelectTransform: []
   restore: []
 syncCallback = (name, obj, cb) ->
   if callbacks[name] and callbacks[name].length
@@ -47,16 +49,12 @@ asyncCallback = (name, obj, cb) ->
     cb? true
 encryptString = (str) ->
   if str
-    encrypt = crypto.createCipher algorithm, settings.ENCRYPTION_KEY or settings.SESSION_SECRET
-    output = encrypt.update str, 'binary', 'binary'
-    output += encrypt.final 'binary'
-    output
+    return cryptojs.AES.encrypt(str, (settings.ENCRYPTION_KEY or settings.SESSION_SECRET)).toString()
+  return null
 decryptString = (str) ->
   if str
-    decrypt = crypto.createDecipher algorithm, settings.ENCRYPTION_KEY or settings.SESSION_SECRET
-    output = decrypt.update str, 'binary', 'binary'
-    output += decrypt.final 'binary'
-    output
+    return cryptojs.AES.decrypt(str, (settings.ENCRYPTION_KEY or settings.SESSION_SECRET)).toString(cryptojs.enc.Utf8)
+  return ''
 encryptObj = (obj, path) ->
   myobj = {}
   for ignore in encryptIgnore
@@ -167,6 +165,7 @@ module.exports =
     #todo $like and sorting
     ((user) ->
       asyncCallback (if isServer then 'serverPreSelect' else 'preSelect'), 
+        pre: true
         table: table
         args: args
         user: user
@@ -180,6 +179,7 @@ module.exports =
           if err
             return cb? [], 0
           asyncCallback (if isServer then 'serverSelect' else 'select'), 
+            post: true
             table: table
             objs: output
             isServer: isServer
@@ -195,6 +195,7 @@ module.exports =
               for obj in output
                 obj = decryptObj obj, table
             asyncCallback (if isServer then 'serverSelectTransform' else 'selectTransform'),
+              transform: true
               table: table
               objs: output
               isServer: isServer
@@ -209,8 +210,10 @@ module.exports =
           sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
         where = if args.where then args.where else args
         where = convertWhere where
-        if useEncryption
-          where = encryptWhere where, table
+        #if useEncryption
+        #  where = encryptWhere where, table
+        #console.log table
+        #console.log where
         collection.find where, options
         .sort sort
         .toArray myCb        
@@ -227,6 +230,7 @@ module.exports =
     cleanObj obj 
     ((user) ->
       asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
+        pre: true
         id: obj._id or whereObj._id
         table: table
         obj: obj
@@ -244,6 +248,7 @@ module.exports =
         , (err, result) ->
           ndx.user = user
           asyncCallback (if isServer then 'serverUpdate' else 'update'),
+            post: true
             id: id
             table: table
             obj: obj
@@ -258,6 +263,7 @@ module.exports =
     ((user) ->
       ndx.user = user
       asyncCallback (if isServer then 'serverPreInsert' else 'preInsert'),
+        pre: true
         table: table
         obj: obj
         user: user
@@ -273,6 +279,7 @@ module.exports =
               ndx.user = user
               o._id = r.insertedId
               asyncCallback (if isServer then 'serverInsert' else 'insert'),
+                post: true
                 id: o._id
                 table: table
                 obj: o
@@ -288,6 +295,7 @@ module.exports =
             ndx.user = user
             obj._id = r.insertedId
             asyncCallback (if isServer then 'serverInsert' else 'insert'),
+              post: true
               id: obj._id
               table: table
               obj: obj
@@ -308,6 +316,7 @@ module.exports =
       where = encryptWhere where, table
     ((user) ->
       asyncCallback (if isServer then 'serverPreDelete' else 'preDelete'),
+        pre: true
         table: table
         where: whereObj
         user: user
@@ -318,6 +327,7 @@ module.exports =
         collection = database.collection table
         collection.deleteMany whereObj, null, ->
           asyncCallback (if isServer then 'serverDelete' else 'delete'), 
+            post: true
             table: table
             user: ndx.user
             isServer: isServer
