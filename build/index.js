@@ -162,6 +162,8 @@
     for (key in obj) {
       if (key.indexOf('$') === 0 || key === '#') {
         delete obj[key];
+      } else if (Object.prototype.toString.call(obj[key]) === '[object Object]') {
+        cleanObj(obj[key]);
       }
     }
   };

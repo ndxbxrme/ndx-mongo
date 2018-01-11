@@ -98,6 +98,8 @@ cleanObj = (obj) ->
   for key of obj
     if key.indexOf('$') is 0 or key is '#'
       delete obj[key]
+    else if Object.prototype.toString.call(obj[key]) is '[object Object]'
+      cleanObj obj[key]
   return
 convertWhere = (where) ->
   walk = (base, current, route) ->
@@ -210,10 +212,10 @@ module.exports =
           sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
         where = if args.where then args.where else args
         where = convertWhere where
+        #console.log where
         #if useEncryption
         #  where = encryptWhere where, table
         #console.log table
-        #console.log where
         collection.find where, options
         .sort sort
         .toArray myCb        
