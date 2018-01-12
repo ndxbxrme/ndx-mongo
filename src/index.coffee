@@ -164,7 +164,8 @@ module.exports =
     callbacks[name].splice callbacks[name].indexOf(callback), 1
     @
   select: (table, args, cb, isServer) ->
-    #todo $like and sorting
+    if ndx.cache && cacheResult = ndx.cache.get table, args, ndx.user
+      return cb? cacheResult.output, cacheResult.total
     ((user) ->
       asyncCallback (if isServer then 'serverPreSelect' else 'preSelect'), 
         pre: true
@@ -204,6 +205,9 @@ module.exports =
               user: user
             , ->
               ndx.user = user
+              ndx.cache && ndx.cache.set table, args, user,
+                output: output
+                total: total
               cb? output, total
         collection = database.collection table
         options = {}
@@ -241,6 +245,7 @@ module.exports =
       , (result) ->
         if not result
           return cb? []
+        ndx.cache && ndx.cache.reset table
         ndx.user = user
         collection = database.collection table
         id = obj._id or whereObj._id
@@ -272,6 +277,7 @@ module.exports =
       , (result) ->
         if not result
           return cb? []
+        ndx.cache && ndx.cache.reset table
         ndx.user = user
         collection = database.collection table
         if Object.prototype.toString.call(obj) is '[object Array]'
@@ -325,6 +331,7 @@ module.exports =
       , (result) ->
         if not result
           cb? []
+        ndx.cache && ndx.cache.reset table
         ndx.user = user
         collection = database.collection table
         collection.deleteMany whereObj, null, ->

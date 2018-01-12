@@ -266,6 +266,10 @@
       return this;
     },
     select: function(table, args, cb, isServer) {
+      var cacheResult;
+      if (ndx.cache && (cacheResult = ndx.cache.get(table, args, ndx.user))) {
+        return typeof cb === "function" ? cb(cacheResult.output, cacheResult.total) : void 0;
+      }
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreSelect' : 'preSelect'), {
           pre: true,
@@ -313,6 +317,10 @@
                 user: user
               }, function() {
                 ndx.user = user;
+                ndx.cache && ndx.cache.set(table, args, user, {
+                  output: output,
+                  total: total
+                });
                 return typeof cb === "function" ? cb(output, total) : void 0;
               });
             });
@@ -357,6 +365,7 @@
           if (!result) {
             return typeof cb === "function" ? cb([]) : void 0;
           }
+          ndx.cache && ndx.cache.reset(table);
           ndx.user = user;
           collection = database.collection(table);
           id = obj._id || whereObj._id;
@@ -395,6 +404,7 @@
           if (!result) {
             return typeof cb === "function" ? cb([]) : void 0;
           }
+          ndx.cache && ndx.cache.reset(table);
           ndx.user = user;
           collection = database.collection(table);
           if (Object.prototype.toString.call(obj) === '[object Array]') {
@@ -466,6 +476,7 @@
               cb([]);
             }
           }
+          ndx.cache && ndx.cache.reset(table);
           ndx.user = user;
           collection = database.collection(table);
           return collection.deleteMany(whereObj, null, function() {
