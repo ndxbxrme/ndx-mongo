@@ -528,7 +528,7 @@
               outSlug = testSlug;
             }
             return callback(null, outSlug);
-          });
+          }, true);
         };
       })(this), function(err, slug) {
         data.slug = slug;
