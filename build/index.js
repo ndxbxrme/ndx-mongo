@@ -1,6 +1,6 @@
 (function() {
   'use strict';
-  var MongoClient, ObjectId, algorithm, async, asyncCallback, callbacks, cleanObj, convertWhere, crypto, cryptojs, database, decryptObj, decryptString, encryptIgnore, encryptObj, encryptString, encryptWhere, maintenanceMode, minimatch, ndx, objtrans, s, settings, syncCallback, useEncryption, version;
+  var DeepDiff, MongoClient, ObjectId, algorithm, async, asyncCallback, callbacks, cleanObj, convertWhere, crypto, cryptojs, database, decryptObj, decryptString, encryptIgnore, encryptObj, encryptString, encryptWhere, maintenanceMode, minimatch, ndx, objtrans, readDiffs, s, settings, syncCallback, unpack, useEncryption, version;
 
   MongoClient = require('mongodb').MongoClient;
 
@@ -21,6 +21,8 @@
   settings = require('./settings');
 
   s = require('underscore.string');
+
+  DeepDiff = require('deep-diff').diff;
 
   version = require('../package.json').version;
 
@@ -50,11 +52,11 @@
   };
 
   syncCallback = function(name, obj, cb) {
-    var callback, i, len, ref;
+    var callback, j, len, ref;
     if (callbacks[name] && callbacks[name].length) {
       ref = callbacks[name];
-      for (i = 0, len = ref.length; i < len; i++) {
-        callback = ref[i];
+      for (j = 0, len = ref.length; j < len; j++) {
+        callback = ref[j];
         callback(obj);
       }
     }
@@ -93,10 +95,10 @@
   };
 
   encryptObj = function(obj, path) {
-    var i, ignore, key, len, myobj, type;
+    var ignore, j, key, len, myobj, type;
     myobj = {};
-    for (i = 0, len = encryptIgnore.length; i < len; i++) {
-      ignore = encryptIgnore[i];
+    for (j = 0, len = encryptIgnore.length; j < len; j++) {
+      ignore = encryptIgnore[j];
       if (minimatch(path, ignore)) {
         return obj;
       }
@@ -113,9 +115,9 @@
   };
 
   decryptObj = function(obj, path) {
-    var i, ignore, key, len, type;
-    for (i = 0, len = encryptIgnore.length; i < len; i++) {
-      ignore = encryptIgnore[i];
+    var ignore, j, key, len, type;
+    for (j = 0, len = encryptIgnore.length; j < len; j++) {
+      ignore = encryptIgnore[j];
       if (minimatch(path, ignore)) {
         return obj;
       }
@@ -135,10 +137,10 @@
   };
 
   encryptWhere = function(obj, path) {
-    var i, ignore, key, len, mypath, type;
+    var ignore, j, key, len, mypath, type;
     type = Object.prototype.toString.call(obj);
-    for (i = 0, len = encryptIgnore.length; i < len; i++) {
-      ignore = encryptIgnore[i];
+    for (j = 0, len = encryptIgnore.length; j < len; j++) {
+      ignore = encryptIgnore[j];
       if (minimatch(path, ignore)) {
         return obj;
       }
@@ -168,6 +170,55 @@
     }
   };
 
+  readDiffs = function(from, to, out) {
+    var dif, diffs, good, j, len, myout, mypath;
+    diffs = DeepDiff(from, to);
+    out = out || {};
+    for (j = 0, len = diffs.length; j < len; j++) {
+      dif = diffs[j];
+      switch (dif.kind) {
+        case 'E':
+        case 'N':
+          myout = out;
+          mypath = dif.path.join('.');
+          good = true;
+          if (dif.lhs && dif.rhs && typeof dif.lhs !== typeof dif.rhs) {
+            if (dif.lhs.toString() === dif.rhs.toString()) {
+              good = false;
+            }
+          }
+          if (good) {
+            myout[mypath] = {};
+            myout = myout[mypath];
+            myout.from = dif.lhs;
+            myout.to = dif.rhs;
+          }
+      }
+    }
+    return out;
+  };
+
+  unpack = function(diffs, out) {
+    var bit, bits, i, j, key, len, myout;
+    out = out || {};
+    for (key in diffs) {
+      bits = key.split(/\./g);
+      myout = out;
+      for (i = j = 0, len = bits.length; j < len; i = ++j) {
+        bit = bits[i];
+        if (!myout[bit]) {
+          if (i < bits.length - 1) {
+            myout[bit] = {};
+          } else {
+            myout[bit] = diffs[key];
+          }
+        }
+        myout = myout[bit];
+      }
+    }
+    return out;
+  };
+
   convertWhere = function(where) {
     var walk;
     walk = function(base, current, route) {
@@ -195,10 +246,10 @@
         } else if (type === '[object Array]') {
           if (obj.length && Object.prototype.toString.call(obj[0]) === '[object Object]') {
             results1.push((function() {
-              var i, len, results2;
+              var j, len, results2;
               results2 = [];
-              for (i = 0, len = obj.length; i < len; i++) {
-                item = obj[i];
+              for (j = 0, len = obj.length; j < len; j++) {
+                item = obj[j];
                 results2.push(item = walk(item, item, ''));
               }
               return results2;
@@ -295,7 +346,7 @@
               isServer: isServer,
               user: user
             }, function() {
-              var i, len, obj, total;
+              var j, len, obj, total;
               ndx.user = user;
               total = output.length;
               if (args.page || args.pageSize) {
@@ -304,8 +355,8 @@
                 output = output.splice((args.page - 1) * args.pageSize, args.pageSize);
               }
               if (useEncryption) {
-                for (i = 0, len = output.length; i < len; i++) {
-                  obj = output[i];
+                for (j = 0, len = output.length; j < len; j++) {
+                  obj = output[j];
                   obj = decryptObj(obj, table);
                 }
               }
@@ -346,47 +397,69 @@
       });
     },
     update: function(table, obj, whereObj, cb, isServer) {
-      var where;
       whereObj = convertWhere(whereObj);
-      if (useEncryption) {
-        where = encryptWhere(where, table);
-      }
       cleanObj(obj);
       return (function(user) {
-        return asyncCallback((isServer ? 'serverPreUpdate' : 'preUpdate'), {
-          pre: true,
-          id: obj._id || whereObj._id,
-          table: table,
-          obj: obj,
-          where: whereObj,
-          user: user
-        }, function(result) {
-          var collection, id;
-          if (!result) {
-            return typeof cb === "function" ? cb([]) : void 0;
-          }
-          ndx.cache && ndx.cache.reset(table);
-          ndx.user = user;
-          collection = database.collection(table);
-          id = obj._id || whereObj._id;
-          delete obj._id;
-          return collection.updateOne(whereObj, {
-            $set: useEncryption ? encryptObj(obj, table) : obj
-          }, function(err, result) {
-            ndx.user = user;
-            asyncCallback((isServer ? 'serverUpdate' : 'update'), {
-              post: true,
-              id: id,
-              table: table,
-              obj: obj,
-              user: user,
-              isServer: isServer
+        var collection;
+        collection = database.collection(table);
+        return collection.find(whereObj, {}).toArray(function(err, oldItems) {
+          var ids;
+          if (!err && oldItems) {
+            ids = [];
+            return async.each(oldItems, function(oldItem, diffCb) {
+              var diffs;
+              if (useEncryption) {
+                oldItem = decryptObj(oldItem, table);
+              }
+              diffs = readDiffs(oldItem, unpack(obj));
+              return asyncCallback((isServer ? 'serverPreUpdate' : 'preUpdate'), {
+                pre: true,
+                id: oldItem._id.toString(),
+                table: table,
+                obj: obj,
+                where: whereObj,
+                changes: diffs,
+                user: user
+              }, function(result) {
+                var id;
+                if (!result) {
+                  return diffCb();
+                }
+                ndx.cache && ndx.cache.reset(table);
+                ndx.user = user;
+                id = oldItem._id.toString();
+                delete obj._id;
+                return collection.updateOne({
+                  _id: oldItem._id
+                }, {
+                  $set: useEncryption ? encryptObj(obj, table) : obj
+                }, function(err, result) {
+                  ndx.user = user;
+                  asyncCallback((isServer ? 'serverUpdate' : 'update'), {
+                    post: true,
+                    id: id,
+                    table: table,
+                    obj: obj,
+                    changes: diffs,
+                    user: user,
+                    isServer: isServer
+                  });
+                  ids.push(result.insertedId);
+                  return diffCb();
+                });
+              });
+            }, function() {
+              return typeof cb === "function" ? cb(err, {
+                op: 'update',
+                id: ids
+              }) : void 0;
             });
-            return typeof cb === "function" ? cb(err, {
+          } else {
+            return typeof cb === "function" ? cb('nothing to update', {
               op: 'update',
-              id: result.insertedId
+              id: null
             }) : void 0;
-          });
+          }
         });
       })(ndx.user);
     },

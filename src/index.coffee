@@ -12,6 +12,8 @@ algorithm = 'aes-256-ctr'
 objtrans = require 'objtrans'
 settings = require './settings'
 s = require('underscore.string')
+DeepDiff = require 'deep-diff'
+.diff
 version = require('../package.json').version
 database = null
 ndx = {}
@@ -101,6 +103,37 @@ cleanObj = (obj) ->
     else if Object.prototype.toString.call(obj[key]) is '[object Object]'
       cleanObj obj[key]
   return
+readDiffs = (from, to, out) ->
+  diffs = DeepDiff from, to
+  out = out or {}
+  for dif in diffs
+    switch dif.kind
+      when 'E', 'N'
+        myout = out
+        mypath = dif.path.join('.')
+        good = true
+        if dif.lhs and dif.rhs and typeof(dif.lhs) isnt typeof(dif.rhs)
+          if dif.lhs.toString() is dif.rhs.toString()
+            good = false
+        if good
+          myout[mypath] ={}
+          myout = myout[mypath]
+          myout.from = dif.lhs
+          myout.to = dif.rhs
+  out
+unpack = (diffs, out) ->
+  out = out or {}
+  for key of diffs
+    bits = key.split /\./g
+    myout = out
+    for bit, i in bits
+      if not myout[bit]
+        if i < bits.length - 1
+          myout[bit] = {}
+        else
+          myout[bit] = diffs[key]
+      myout = myout[bit]
+  out
 convertWhere = (where) ->
   walk = (base, current, route) ->
     if current and current.hasOwnProperty('$like')
@@ -231,39 +264,56 @@ module.exports =
       cb? count
   update:  (table, obj, whereObj, cb, isServer) ->
     whereObj = convertWhere whereObj
-    if useEncryption
-      where = encryptWhere where, table
     cleanObj obj 
     ((user) ->
-      asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
-        pre: true
-        id: obj._id or whereObj._id
-        table: table
-        obj: obj
-        where: whereObj
-        user: user
-      , (result) ->
-        if not result
-          return cb? []
-        ndx.cache && ndx.cache.reset table
-        ndx.user = user
-        collection = database.collection table
-        id = obj._id or whereObj._id
-        delete obj._id
-        collection.updateOne whereObj,
-          $set: if useEncryption then encryptObj(obj, table) else obj
-        , (err, result) ->
-          ndx.user = user
-          asyncCallback (if isServer then 'serverUpdate' else 'update'),
-            post: true
-            id: id
-            table: table
-            obj: obj
-            user: user
-            isServer: isServer
-          cb? err, 
+      collection = database.collection table
+      collection.find whereObj, {}
+      .toArray (err, oldItems) ->
+        if not err and oldItems
+          ids = []
+          async.each oldItems, (oldItem, diffCb) ->
+            if useEncryption
+              oldItem = decryptObj oldItem, table
+            diffs = readDiffs oldItem, unpack(obj)
+            asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
+              pre: true
+              id: oldItem._id.toString()
+              table: table
+              obj: obj
+              where: whereObj
+              changes: diffs
+              user: user
+            , (result) ->
+              if not result
+                return diffCb()
+              ndx.cache && ndx.cache.reset table
+              ndx.user = user
+              id =oldItem._id.toString()
+              delete obj._id
+              collection.updateOne
+                _id: oldItem._id
+              ,
+                $set: if useEncryption then encryptObj(obj, table) else obj
+              , (err, result) ->
+                ndx.user = user
+                asyncCallback (if isServer then 'serverUpdate' else 'update'),
+                  post: true
+                  id: id
+                  table: table
+                  obj: obj
+                  changes: diffs
+                  user: user
+                  isServer: isServer
+                ids.push result.insertedId
+                diffCb()
+          , ->
+            cb? err,
+              op: 'update'
+              id: ids
+        else
+          cb? 'nothing to update',
             op: 'update'
-            id: result.insertedId
+            id: null      
     )(ndx.user)
   insert: (table, obj, cb, isServer) ->
     cleanObj obj
