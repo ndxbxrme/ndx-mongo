@@ -127,6 +127,8 @@
       for (key in obj) {
         obj[key] = decryptObj(obj[key], path + "." + key);
       }
+    } else if (type === '[object Boolean]') {
+      return obj;
     } else {
       if (!obj) {
         return obj;
@@ -153,6 +155,8 @@
         }
         obj[key] = encryptWhere(obj[key], mypath);
       }
+    } else if (type === '[object Boolean]') {
+      return obj;
     } else {
       return encryptString(JSON.stringify(obj));
     }
@@ -611,7 +615,17 @@
     fieldFromTemplate: function(template, data, fieldName) {
       return data[fieldName] = ndx.fillTemplate(template, data);
     },
-    decryptObj: decryptObj
+    decryptObj: decryptObj,
+    stats: function(cb) {
+      return database.command({
+        dbStats: 1
+      }, function(err, result) {
+        return cb(err, result);
+      });
+    },
+    cacheSize: function() {
+      return 0;
+    }
   };
 
 }).call(this);

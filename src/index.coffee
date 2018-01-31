@@ -77,6 +77,8 @@ decryptObj = (obj, path) ->
   if type is '[object Object]'
     for key of obj
       obj[key] = decryptObj obj[key], "#{path}.#{key}"
+  else if type is '[object Boolean]'
+    return obj
   else
     if not obj
       return obj
@@ -93,6 +95,8 @@ encryptWhere = (obj, path) ->
       if key.indexOf('$') isnt 0
         mypath = "#{path}.#{key}"
       obj[key] = encryptWhere obj[key], mypath
+  else if type is '[object Boolean]'
+    return obj
   else
     return encryptString JSON.stringify obj
   obj
@@ -427,3 +431,10 @@ module.exports =
   fieldFromTemplate: (template, data, fieldName) ->
     data[fieldName] = ndx.fillTemplate template, data
   decryptObj: decryptObj
+  stats: (cb) ->
+    database.command
+      dbStats: 1
+    , (err, result) ->
+      cb err, result
+  cacheSize: ->
+    0
