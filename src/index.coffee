@@ -1,5 +1,4 @@
 'use strict'
-
 MongoClient = require 'mongodb'
 .MongoClient
 ObjectId = require 'mongodb'
@@ -250,13 +249,14 @@ module.exports =
         options = {}
         sort = {}
         if args.sort
-          sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
+          if typeof args.sort is 'string'
+            sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
+          else
+            sort = args.sort
         where = if args.where then args.where else args
         where = convertWhere where
-        #console.log where
         #if useEncryption
         #  where = encryptWhere where, table
-        #console.log table
         collection.find where, options
         .sort sort
         .toArray myCb        
@@ -334,6 +334,8 @@ module.exports =
         ndx.cache && ndx.cache.reset table
         ndx.user = user
         collection = database.collection table
+        if obj._id and Object.prototype.toString.call(obj._id) is '[object String]'
+          obj._id = new ObjectId(obj._id)
         if Object.prototype.toString.call(obj) is '[object Array]'
           async.each obj, (o, callback) ->
             collection.insertOne (if useEncryption then encryptObj(o, table) else o)
@@ -368,10 +370,23 @@ module.exports =
               id: r.insertedId
     )(ndx.user)
   upsert: (table, obj, whereObj, cb, isServer) ->
-    if JSON.stringify(whereObj) isnt '{}'
-      @update table, obj, whereObj, cb, isServer
-    else
-      @insert table, obj, cb, isServer
+    where = convertWhere whereObj
+    if (not whereObj or JSON.stringify(whereObj) is '{}') and obj._id
+      whereObj = {}
+      whereObj._id = obj._id.toString()
+      where = convertWhere whereObj
+    ((user) =>
+      collection = database.collection table
+      collection.find where
+      .toArray (err, test) =>
+        if test and test.length
+          @update table, obj, whereObj, cb, isServer
+        else
+          @insert table, obj, cb, isServer
+      ###
+      if JSON.stringify(whereObj) isnt '{}'
+      ###
+    )(ndx.user)
   delete: (table, whereObj, cb, isServer) ->
     whereObj = convertWhere whereObj
     if useEncryption

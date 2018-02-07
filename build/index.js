@@ -384,7 +384,11 @@
           options = {};
           sort = {};
           if (args.sort) {
-            sort[args.sort] = args.sortDir === 'DESC' ? -1 : 1;
+            if (typeof args.sort === 'string') {
+              sort[args.sort] = args.sortDir === 'DESC' ? -1 : 1;
+            } else {
+              sort = args.sort;
+            }
           }
           where = args.where ? args.where : args;
           where = convertWhere(where);
@@ -484,6 +488,9 @@
           ndx.cache && ndx.cache.reset(table);
           ndx.user = user;
           collection = database.collection(table);
+          if (obj._id && Object.prototype.toString.call(obj._id) === '[object String]') {
+            obj._id = new ObjectId(obj._id);
+          }
           if (Object.prototype.toString.call(obj) === '[object Array]') {
             return async.each(obj, function(o, callback) {
               return collection.insertOne((useEncryption ? encryptObj(o, table) : o), function(err, r) {
@@ -528,11 +535,30 @@
       })(ndx.user);
     },
     upsert: function(table, obj, whereObj, cb, isServer) {
-      if (JSON.stringify(whereObj) !== '{}') {
-        return this.update(table, obj, whereObj, cb, isServer);
-      } else {
-        return this.insert(table, obj, cb, isServer);
+      var where;
+      where = convertWhere(whereObj);
+      if ((!whereObj || JSON.stringify(whereObj) === '{}') && obj._id) {
+        whereObj = {};
+        whereObj._id = obj._id.toString();
+        where = convertWhere(whereObj);
       }
+      return ((function(_this) {
+        return function(user) {
+          var collection;
+          collection = database.collection(table);
+          return collection.find(where).toArray(function(err, test) {
+            if (test && test.length) {
+              return _this.update(table, obj, whereObj, cb, isServer);
+            } else {
+              return _this.insert(table, obj, cb, isServer);
+            }
+          });
+
+          /*
+          if JSON.stringify(whereObj) isnt '{}'
+           */
+        };
+      })(this))(ndx.user);
     },
     "delete": function(table, whereObj, cb, isServer) {
       var where;
