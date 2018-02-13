@@ -284,6 +284,7 @@ module.exports =
               id: oldItem._id.toString()
               table: table
               obj: obj
+              oldObj: oldItem
               where: whereObj
               changes: diffs
               user: user
