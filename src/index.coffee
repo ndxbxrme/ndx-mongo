@@ -376,6 +376,8 @@ module.exports =
       whereObj._id = obj._id.toString()
       where = convertWhere whereObj
     ((user) =>
+      if not whereObj or JSON.stringify(whereObj) is '{}'
+        return @insert table, obj, cb, isServer
       collection = database.collection table
       collection.find where
       .toArray (err, test) =>

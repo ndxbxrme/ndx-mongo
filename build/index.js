@@ -545,6 +545,9 @@
       return ((function(_this) {
         return function(user) {
           var collection;
+          if (!whereObj || JSON.stringify(whereObj) === '{}') {
+            return _this.insert(table, obj, cb, isServer);
+          }
           collection = database.collection(table);
           return collection.find(where).toArray(function(err, test) {
             if (test && test.length) {
