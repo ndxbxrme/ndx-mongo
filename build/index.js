@@ -537,11 +537,11 @@
     },
     upsert: function(table, obj, whereObj, cb, isServer) {
       var where;
-      where = convertWhere(whereObj);
+      where = convertWhere(JSON.parse(JSON.stringify(whereObj)));
       if ((!whereObj || JSON.stringify(whereObj) === '{}') && obj._id) {
         whereObj = {};
         whereObj._id = obj._id.toString();
-        where = convertWhere(whereObj);
+        where = convertWhere(JSON.parse(JSON.stringify(whereObj)));
       }
       return ((function(_this) {
         return function(user) {

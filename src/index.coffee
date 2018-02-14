@@ -371,11 +371,11 @@ module.exports =
               id: r.insertedId
     )(ndx.user)
   upsert: (table, obj, whereObj, cb, isServer) ->
-    where = convertWhere whereObj
+    where = convertWhere JSON.parse JSON.stringify whereObj
     if (not whereObj or JSON.stringify(whereObj) is '{}') and obj._id
       whereObj = {}
       whereObj._id = obj._id.toString()
-      where = convertWhere whereObj
+      where = convertWhere JSON.parse JSON.stringify whereObj
     ((user) =>
       if not whereObj or JSON.stringify(whereObj) is '{}'
         return @insert table, obj, cb, isServer
