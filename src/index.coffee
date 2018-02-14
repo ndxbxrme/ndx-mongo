@@ -65,6 +65,8 @@ encryptObj = (obj, path) ->
   if type is '[object Object]'
     for key of obj
       myobj[key] = encryptObj obj[key], "#{path}.#{key}"
+  else if type is '[object Boolean]'
+    return obj
   else
     return encryptString JSON.stringify obj
   myobj

@@ -108,6 +108,8 @@
       for (key in obj) {
         myobj[key] = encryptObj(obj[key], path + "." + key);
       }
+    } else if (type === '[object Boolean]') {
+      return obj;
     } else {
       return encryptString(JSON.stringify(obj));
     }
