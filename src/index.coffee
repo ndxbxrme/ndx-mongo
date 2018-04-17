@@ -202,67 +202,72 @@ module.exports =
     callbacks[name].splice callbacks[name].indexOf(callback), 1
     @
   select: (table, args, cb, isServer) ->
-    if ndx.cache && cacheResult = ndx.cache.get table, args, ndx.user
-      return cb? cacheResult.output, cacheResult.total
-    ((user) ->
-      asyncCallback (if isServer then 'serverPreSelect' else 'preSelect'), 
-        pre: true
-        table: table
-        args: args
-        user: user
-      , (result) ->
-        if not result
-          return cb? [], 0
-        args = args or {}
-        ndx.user = user
-        myCb = (err, output) ->
-          ndx.user = user
-          if err
+    new Promise (resolve, reject) ->
+      if ndx.cache && cacheResult = ndx.cache.get table, args, ndx.user
+        resolve cacheResults.output
+        return cb? cacheResult.output, cacheResult.total
+      ((user) ->
+        asyncCallback (if isServer then 'serverPreSelect' else 'preSelect'), 
+          pre: true
+          table: table
+          args: args
+          user: user
+        , (result) ->
+          if not result
+            resolve []
             return cb? [], 0
-          asyncCallback (if isServer then 'serverSelect' else 'select'), 
-            post: true
-            table: table
-            objs: output
-            isServer: isServer
-            user: user
-          , ->
+          args = args or {}
+          ndx.user = user
+          myCb = (err, output) ->
             ndx.user = user
-            total = output.length
-            if args.page or args.pageSize
-              args.page = args.page or 1
-              args.pageSize = args.pageSize or 10
-              output = output.splice (args.page - 1) * args.pageSize, args.pageSize
-            if useEncryption
-              for obj in output
-                obj = decryptObj obj, table
-            asyncCallback (if isServer then 'serverSelectTransform' else 'selectTransform'),
-              transform: true
+            if err
+              resolve []
+              return cb? [], 0
+            asyncCallback (if isServer then 'serverSelect' else 'select'), 
+              post: true
               table: table
               objs: output
               isServer: isServer
               user: user
             , ->
               ndx.user = user
-              ndx.cache && ndx.cache.set table, args, user,
-                output: output
-                total: total
-              cb? output, total
-        collection = database.collection table
-        options = {}
-        sort = {}
-        if args.sort
-          if typeof args.sort is 'string'
-            sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
-          else
-            sort = args.sort
-        where = if args.where then args.where else args
-        where = convertWhere where
-        #if useEncryption
-        #  where = encryptWhere where, table
-        collection.find where, options
-        .sort sort
-        .toArray myCb        
-    )(ndx.user)
+              total = output.length
+              if args.page or args.pageSize
+                args.page = args.page or 1
+                args.pageSize = args.pageSize or 10
+                output = output.splice (args.page - 1) * args.pageSize, args.pageSize
+              if useEncryption
+                for obj in output
+                  obj = decryptObj obj, table
+              asyncCallback (if isServer then 'serverSelectTransform' else 'selectTransform'),
+                transform: true
+                table: table
+                objs: output
+                isServer: isServer
+                user: user
+              , ->
+                ndx.user = user
+                ndx.cache && ndx.cache.set table, args, user,
+                  output: output
+                  total: total
+                resolve output
+                cb? output, total
+          collection = database.collection table
+          options = {}
+          sort = {}
+          if args.sort
+            if typeof args.sort is 'string'
+              sort[args.sort] = if args.sortDir is 'DESC' then -1 else 1
+            else
+              sort = args.sort
+          where = if args.where then args.where else args
+          where = convertWhere where
+          #if useEncryption
+          #  where = encryptWhere where, table
+          collection.find where, options
+          .sort sort
+          .toArray myCb        
+      )(ndx.user)
   count: (table, whereObj, cb) ->
     whereObj = convertWhere whereObj
     collection = database.collection table
@@ -281,13 +286,17 @@ module.exports =
             if useEncryption
               oldItem = decryptObj oldItem, table
             diffs = readDiffs oldItem, unpack(obj)
+            newObj = {}
+            Object.assign newObj, oldItem
+            Object.assign newObj, obj
             asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
               pre: true
               id: oldItem._id.toString()
               table: table
+              where: whereObj
               obj: obj
               oldObj: oldItem
-              where: whereObj
+              newObj: newObj
               changes: diffs
               user: user
             , (result) ->
@@ -308,6 +317,8 @@ module.exports =
                   id: id
                   table: table
                   obj: obj
+                  oldObj: oldItem
+                  newObj: newObj
                   changes: diffs
                   user: user
                   isServer: isServer

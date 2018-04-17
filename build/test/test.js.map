@@ -6,5 +6,8 @@
     "test.coffee"
   ],
   "names": [],
-  "mappings": "AAAA;EAAA;EAEA,OAAO,CAAC,GAAR,CAAY,MAAZ;AAFA"
+  "mappings": "AAAA;EAAA;EAEA,OAAO,CAAC,GAAR,CAAY,MAAZ;AAFA",
+  "sourcesContent": [
+    "'use strict'\r\n\r\nconsole.log 'test'"
+  ]
 }
