@@ -19,6 +19,31 @@ require 'ndx-server
 ## Environment variables
 mongoUrl can be set with the environment variable `MONGO_URL`  
 
+## Methods
+
+
+### `db.select(string table, object whereObj, function callback)`
+
+Select data  
+
+### `db.insert(string table, object insertObj, function callback)`
+
+Insert data
+
+### `db.update(string table, object updateObj, object whereObj, function callback)`
+
+Update data
+
+### `db.upsert(string table, object upsertObj, object whereObj, function callback)`
+
+Upsert data
+
+### `db.delete(string table, object whereObj, function callback)`
+
+Delete data  
+
+### `db.exec(string sql, array props, bool notCritical) -> data`
+
 ## Callbacks
 
 ```coffeescript
@@ -27,10 +52,10 @@ ndx.database.on 'callbackName', (args, cb) ->
   cb true #or false if you want to cancel the operation
 ```
 
-### `ready`
+#### `ready`
   The database is ready to use
 
-### `preInsert`
+#### `preInsert`
 * `args.table`
   The database table being operated on
 * `args.obj`
@@ -40,7 +65,7 @@ ndx.database.on 'callbackName', (args, cb) ->
   
 `cb(false)` to cancel the insert
   
-### `insert`
+#### `insert`
 * `args.id`
   The inserted object's id
 * `args.table`
@@ -50,7 +75,7 @@ ndx.database.on 'callbackName', (args, cb) ->
 * `args.user`
   The user carrying out the operation
   
-### `preUpdate`
+#### `preUpdate`
 * `args.id`
   The id of the object being updated
 * `args.table`
@@ -68,7 +93,7 @@ ndx.database.on 'callbackName', (args, cb) ->
   
 `cb(false)` to cancel the update
   
-### `update`
+#### `update`
 * `args.id`
   The id of the object that was updated
 * `args.table`
@@ -84,7 +109,7 @@ ndx.database.on 'callbackName', (args, cb) ->
 * `args.user`
   The user carrying out the operation
   
-### `preSelect`
+#### `preSelect`
 * `args.table`
   The database table being operated on
 * `args.args`
@@ -92,7 +117,9 @@ ndx.database.on 'callbackName', (args, cb) ->
 * `args.user`
   The user carrying out the operation
   
-### `select`
+`cb(false)` to cancel the select
+  
+#### `select`
 * `args.table`
   The database table being operated on
 * `args.objs`
@@ -100,7 +127,7 @@ ndx.database.on 'callbackName', (args, cb) ->
 * `args.user`
   The user carrying out the operation
   
-### `preDelete`
+#### `preDelete`
 * `args.table`
   The database table being operated on
 * `args.where`
@@ -108,7 +135,9 @@ ndx.database.on 'callbackName', (args, cb) ->
 * `args.user`
   The user carrying out the operation
   
-### `delete`
+`cb(false)` to cancel the delete
+  
+#### `delete`
 * `args.table`
   The database table being operated on
 * `args.user`
@@ -117,28 +146,6 @@ ndx.database.on 'callbackName', (args, cb) ->
 callbacks can be used to modify data flowing to and from the database.  
 see [ndx-permissions](https://github.com/ndxbxrme/ndx-permissions) and [ndx-profiler](https://github.com/ndxbxrme/ndx-profiler) for examles  
 
-#### `db.off(string callbackName, function callback) -> db`
+### `db.off(string callbackName, function callback) -> db`
 
 Unregister a callback
-
-#### `db.select(string table, object whereObj, function callback)`
-
-Select data  
-
-#### `db.insert(string table, object insertObj, function callback)`
-
-Insert data
-
-#### `db.update(string table, object updateObj, object whereObj, function callback)`
-
-Update data
-
-#### `db.upsert(string table, object upsertObj, object whereObj, function callback)`
-
-Upsert data
-
-#### `db.delete(string table, object whereObj, function callback)`
-
-Delete data  
-
-#### `db.exec(string sql, array props, bool notCritical) -> data`
