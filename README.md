@@ -27,6 +27,9 @@ ndx.database.on 'callbackName', (args, cb) ->
   cb true #or false if you want to cancel the operation
 ```
 
+### `ready`
+  The database is ready to use
+
 ### `preInsert`
 * `args.table`
   The database table being operated on
@@ -81,3 +84,61 @@ ndx.database.on 'callbackName', (args, cb) ->
 * `args.user`
   The user carrying out the operation
   
+### `preSelect`
+* `args.table`
+  The database table being operated on
+* `args.args`
+  The arguments that were passed to the select function
+* `args.user`
+  The user carrying out the operation
+  
+### `select`
+* `args.table`
+  The database table being operated on
+* `args.objs`
+  The objects that were selected from the database
+* `args.user`
+  The user carrying out the operation
+  
+### `preDelete`
+* `args.table`
+  The database table being operated on
+* `args.where`
+  The database query
+* `args.user`
+  The user carrying out the operation
+  
+### `delete`
+* `args.table`
+  The database table being operated on
+* `args.user`
+  The user carrying out the operation
+  
+callbacks can be used to modify data flowing to and from the database.  
+see [ndx-permissions](https://github.com/ndxbxrme/ndx-permissions) and [ndx-profiler](https://github.com/ndxbxrme/ndx-profiler) for examles  
+
+#### `db.off(string callbackName, function callback) -> db`
+
+Unregister a callback
+
+#### `db.select(string table, object whereObj, function callback)`
+
+Select data  
+
+#### `db.insert(string table, object insertObj, function callback)`
+
+Insert data
+
+#### `db.update(string table, object updateObj, object whereObj, function callback)`
+
+Update data
+
+#### `db.upsert(string table, object upsertObj, object whereObj, function callback)`
+
+Upsert data
+
+#### `db.delete(string table, object whereObj, function callback)`
+
+Delete data  
+
+#### `db.exec(string sql, array props, bool notCritical) -> data`
