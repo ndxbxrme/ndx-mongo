@@ -26,7 +26,7 @@ mongoUrl can be set with the environment variable `MONGO_URL`
 
 Select data  
 
-####### `db.insert(string table, object insertObj, function callback)`
+#### `db.insert(string table, object insertObj, function callback)`
 
 Insert data
 
