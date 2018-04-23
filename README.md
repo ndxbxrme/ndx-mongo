@@ -35,7 +35,7 @@ ndx.database.on 'callbackName', (args, cb) ->
 * `args.user`
   The user carrying out the operation
   
-  `cb(false)` to cancel the insert
+`cb(false)` to cancel the insert
   
 ### `insert`
 * `args.id`
@@ -63,7 +63,7 @@ ndx.database.on 'callbackName', (args, cb) ->
 * `args.user`
   The user carrying out the operation
   
-  `cb(false)` to cancel the update
+`cb(false)` to cancel the update
   
 ### `update`
 * `args.id`
