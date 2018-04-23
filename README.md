@@ -22,27 +22,27 @@ mongoUrl can be set with the environment variable `MONGO_URL`
 ## Methods
 
 
-### `db.select(string table, object whereObj, function callback)`
+#### `db.select(string table, object whereObj, function callback)`
 
 Select data  
 
-### `db.insert(string table, object insertObj, function callback)`
+####### `db.insert(string table, object insertObj, function callback)`
 
 Insert data
 
-### `db.update(string table, object updateObj, object whereObj, function callback)`
+#### `db.update(string table, object updateObj, object whereObj, function callback)`
 
 Update data
 
-### `db.upsert(string table, object upsertObj, object whereObj, function callback)`
+#### `db.upsert(string table, object upsertObj, object whereObj, function callback)`
 
 Upsert data
 
-### `db.delete(string table, object whereObj, function callback)`
+#### `db.delete(string table, object whereObj, function callback)`
 
 Delete data  
 
-### `db.exec(string sql, array props, bool notCritical) -> data`
+#### `db.exec(string sql, array props, bool notCritical) -> data`
 
 ## Callbacks
 
@@ -146,6 +146,6 @@ ndx.database.on 'callbackName', (args, cb) ->
 callbacks can be used to modify data flowing to and from the database.  
 see [ndx-permissions](https://github.com/ndxbxrme/ndx-permissions) and [ndx-profiler](https://github.com/ndxbxrme/ndx-profiler) for examles  
 
-### `db.off(string callbackName, function callback) -> db`
+#### `db.off(string callbackName, function callback) -> db`
 
 Unregister a callback
