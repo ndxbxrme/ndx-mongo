@@ -1,6 +1,6 @@
 (function() {
   'use strict';
-  var DeepDiff, MongoClient, ObjectId, algorithm, async, asyncCallback, callbacks, cleanObj, convertWhere, crypto, cryptojs, database, decryptObj, decryptString, encryptIgnore, encryptObj, encryptString, encryptWhere, maintenanceMode, minimatch, ndx, objtrans, readDiffs, s, settings, syncCallback, unpack, useEncryption, version;
+  var DeepDiff, MongoClient, ObjectId, algorithm, async, asyncCallback, callbacks, cleanObj, convertWhere, crypto, cryptojs, database, decryptObj, decryptString, encryptIgnore, encryptObj, encryptString, encryptWhere, maintenanceMode, minimatch, ndx, objtrans, readDiffs, s, select, selectOne, settings, syncCallback, unpack, useEncryption, version;
 
   MongoClient = require('mongodb').MongoClient;
 
@@ -285,6 +285,101 @@
     return where;
   };
 
+  select = function(table, args, cb, isServer) {
+    return new Promise(function(resolve, reject) {
+      var cacheResult;
+      if (ndx.cache && (cacheResult = ndx.cache.get(table, args, ndx.user))) {
+        resolve(cacheResults.output);
+        return typeof cb === "function" ? cb(cacheResult.output, cacheResult.total) : void 0;
+      }
+      return (function(user) {
+        return asyncCallback((isServer ? 'serverPreSelect' : 'preSelect'), {
+          pre: true,
+          table: table,
+          args: args,
+          user: user
+        }, function(result) {
+          var collection, myCb, options, sort, where;
+          if (!result) {
+            resolve([]);
+            return typeof cb === "function" ? cb([], 0) : void 0;
+          }
+          args = args || {};
+          ndx.user = user;
+          myCb = function(err, output) {
+            ndx.user = user;
+            if (err) {
+              resolve([]);
+              return typeof cb === "function" ? cb([], 0) : void 0;
+            }
+            return asyncCallback((isServer ? 'serverSelect' : 'select'), {
+              post: true,
+              table: table,
+              objs: output,
+              isServer: isServer,
+              user: user
+            }, function() {
+              var j, len, obj, total;
+              ndx.user = user;
+              total = output.length;
+              if (args.page || args.pageSize) {
+                args.page = args.page || 1;
+                args.pageSize = args.pageSize || 10;
+                output = output.splice((args.page - 1) * args.pageSize, args.pageSize);
+              }
+              if (useEncryption) {
+                for (j = 0, len = output.length; j < len; j++) {
+                  obj = output[j];
+                  obj = decryptObj(obj, table);
+                }
+              }
+              return asyncCallback((isServer ? 'serverSelectTransform' : 'selectTransform'), {
+                transform: true,
+                table: table,
+                objs: output,
+                isServer: isServer,
+                user: user
+              }, function() {
+                ndx.user = user;
+                ndx.cache && ndx.cache.set(table, args, user, {
+                  output: output,
+                  total: total
+                });
+                resolve(output);
+                return typeof cb === "function" ? cb(output, total) : void 0;
+              });
+            });
+          };
+          collection = database.collection(table);
+          options = {};
+          sort = {};
+          if (args.sort) {
+            if (typeof args.sort === 'string') {
+              sort[args.sort] = args.sortDir === 'DESC' ? -1 : 1;
+            } else {
+              sort = args.sort;
+            }
+          }
+          where = args.where ? args.where : args;
+          where = convertWhere(where);
+          //if useEncryption
+          //  where = encryptWhere where, table
+          return collection.find(where, options).sort(sort).toArray(myCb);
+        });
+      })(ndx.user);
+    });
+  };
+
+  selectOne = async function(table, args, cb, isServer) {
+    var output;
+    output = (await select(table, args, null, isServer));
+    if (output && output.length) {
+      return output[0];
+    } else {
+      return null;
+    }
+  };
+
   module.exports = {
     config: function(config) {
       var key, keyU;
@@ -322,90 +417,8 @@
       callbacks[name].splice(callbacks[name].indexOf(callback), 1);
       return this;
     },
-    select: function(table, args, cb, isServer) {
-      return new Promise(function(resolve, reject) {
-        var cacheResult;
-        if (ndx.cache && (cacheResult = ndx.cache.get(table, args, ndx.user))) {
-          resolve(cacheResults.output);
-          return typeof cb === "function" ? cb(cacheResult.output, cacheResult.total) : void 0;
-        }
-        return (function(user) {
-          return asyncCallback((isServer ? 'serverPreSelect' : 'preSelect'), {
-            pre: true,
-            table: table,
-            args: args,
-            user: user
-          }, function(result) {
-            var collection, myCb, options, sort, where;
-            if (!result) {
-              resolve([]);
-              return typeof cb === "function" ? cb([], 0) : void 0;
-            }
-            args = args || {};
-            ndx.user = user;
-            myCb = function(err, output) {
-              ndx.user = user;
-              if (err) {
-                resolve([]);
-                return typeof cb === "function" ? cb([], 0) : void 0;
-              }
-              return asyncCallback((isServer ? 'serverSelect' : 'select'), {
-                post: true,
-                table: table,
-                objs: output,
-                isServer: isServer,
-                user: user
-              }, function() {
-                var j, len, obj, total;
-                ndx.user = user;
-                total = output.length;
-                if (args.page || args.pageSize) {
-                  args.page = args.page || 1;
-                  args.pageSize = args.pageSize || 10;
-                  output = output.splice((args.page - 1) * args.pageSize, args.pageSize);
-                }
-                if (useEncryption) {
-                  for (j = 0, len = output.length; j < len; j++) {
-                    obj = output[j];
-                    obj = decryptObj(obj, table);
-                  }
-                }
-                return asyncCallback((isServer ? 'serverSelectTransform' : 'selectTransform'), {
-                  transform: true,
-                  table: table,
-                  objs: output,
-                  isServer: isServer,
-                  user: user
-                }, function() {
-                  ndx.user = user;
-                  ndx.cache && ndx.cache.set(table, args, user, {
-                    output: output,
-                    total: total
-                  });
-                  resolve(output);
-                  return typeof cb === "function" ? cb(output, total) : void 0;
-                });
-              });
-            };
-            collection = database.collection(table);
-            options = {};
-            sort = {};
-            if (args.sort) {
-              if (typeof args.sort === 'string') {
-                sort[args.sort] = args.sortDir === 'DESC' ? -1 : 1;
-              } else {
-                sort = args.sort;
-              }
-            }
-            where = args.where ? args.where : args;
-            where = convertWhere(where);
-            //if useEncryption
-            //  where = encryptWhere where, table
-            return collection.find(where, options).sort(sort).toArray(myCb);
-          });
-        })(ndx.user);
-      });
-    },
+    select: select,
+    selectOne: selectOne,
     count: function(table, whereObj, cb) {
       var collection;
       whereObj = convertWhere(whereObj);
