@@ -334,7 +334,7 @@
                 }
               }
               return asyncCallback((isServer ? 'serverSelectTransform' : 'selectTransform'), {
-                transform: true,
+                transform: args.transform,
                 table: table,
                 objs: output,
                 isServer: isServer,
