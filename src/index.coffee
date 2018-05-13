@@ -214,7 +214,7 @@ select = (table, args, cb, isServer) ->
               for obj in output
                 obj = decryptObj obj, table
             asyncCallback (if isServer then 'serverSelectTransform' else 'selectTransform'),
-              transform: args.transform
+              transformer: args.transformer
               table: table
               objs: output
               isServer: isServer
