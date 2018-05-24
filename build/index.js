@@ -166,14 +166,21 @@
   };
 
   cleanObj = function(obj) {
-    var key;
+    var key, type;
     for (key in obj) {
+      type = Object.prototype.toString.call(obj[key]);
       if (key.indexOf('$') === 0 || key === '#') {
         delete obj[key];
-      } else if (Object.prototype.toString.call(obj[key]) === '[object Object]') {
+      } else if (type === '[object Object]') {
         cleanObj(obj[key]);
       }
     }
+    /*
+    else if type is '[object Array]'
+    for arrObj, i in obj[key]
+      obj[key][i] = cleanObj obj[key][i]
+    */
+    return obj;
   };
 
   readDiffs = function(from, to, out) {
@@ -541,14 +548,14 @@
     return ((user) => {
       var collection;
       if (!whereObj || JSON.stringify(whereObj) === '{}') {
-        return this.insert(table, obj, cb, isServer);
+        return insert(table, obj, cb, isServer, user);
       }
       collection = database.collection(table);
       return collection.find(where).toArray((err, test) => {
         if (test && test.length) {
-          return update(table, obj, whereObj, cb, isServer);
+          return update(table, obj, whereObj, cb, isServer, user);
         } else {
-          return insert(table, obj, cb, isServer);
+          return insert(table, obj, cb, isServer, user);
         }
       });
     /*

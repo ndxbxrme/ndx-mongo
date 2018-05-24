@@ -103,11 +103,17 @@ encryptWhere = (obj, path) ->
   obj
 cleanObj = (obj) ->
   for key of obj
+    type = Object.prototype.toString.call(obj[key])
     if key.indexOf('$') is 0 or key is '#'
       delete obj[key]
-    else if Object.prototype.toString.call(obj[key]) is '[object Object]'
+    else if type is '[object Object]'
       cleanObj obj[key]
-  return
+    ###
+    else if type is '[object Array]'
+      for arrObj, i in obj[key]
+        obj[key][i] = cleanObj obj[key][i]
+    ###
+  obj
 readDiffs = (from, to, out) ->
   diffs = DeepDiff from, to
   out = out or {}
@@ -373,14 +379,14 @@ upsert = (table, obj, whereObj, cb, isServer, user) ->
     where = convertWhere JSON.parse JSON.stringify whereObj
   ((user) =>
     if not whereObj or JSON.stringify(whereObj) is '{}'
-      return @insert table, obj, cb, isServer
+      return insert table, obj, cb, isServer, user
     collection = database.collection table
     collection.find where
     .toArray (err, test) =>
       if test and test.length
-        update table, obj, whereObj, cb, isServer
+        update table, obj, whereObj, cb, isServer, user
       else
-        insert table, obj, cb, isServer
+        insert table, obj, cb, isServer, user
     ###
     if JSON.stringify(whereObj) isnt '{}'
     ###
