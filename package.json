@@ -1,6 +1,6 @@
 {
   "name": "ndx-mongo",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Mongo database connector for ndx-framework apps",
   "main": "build/index.js",
   "scripts": {
@@ -20,7 +20,6 @@
     "grunt-cli": "^1.2.0",
     "grunt-contrib-clean": "^1.1.0",
     "grunt-contrib-coffee": "^2.0.0",
-    "grunt-contrib-nodeunit": "^1.0.0",
     "grunt-contrib-watch": "^1.0.0",
     "load-grunt-tasks": "^3.5.2"
   },
