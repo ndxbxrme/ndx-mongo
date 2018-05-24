@@ -175,9 +175,9 @@ convertWhere = (where) ->
   walk where, where, ''
   delete where['#']
   where
-select = (table, args, cb, isServer) ->
+select = (table, args, cb, isServer, user) ->
   new Promise (resolve, reject) ->
-    if ndx.cache && cacheResult = ndx.cache.get table, args, ndx.user
+    if ndx.cache && cacheResult = ndx.cache.get table, args, user or ndx.user
       resolve cacheResults.output
       return cb? cacheResult.output, cacheResult.total
     ((user) ->
@@ -241,13 +241,174 @@ select = (table, args, cb, isServer) ->
         collection.find where, options
         .sort sort
         .toArray myCb        
-    )(ndx.user)
-selectOne = (table, args, cb, isServer) ->
-  output = await select table, args, null, isServer
+    )(user or ndx.user)
+selectOne = (table, args, cb, isServer, user) ->
+  output = await select table, args, null, isServer, user
   if output and output.length
     return output[0]
   else
     return null
+count = (table, whereObj, cb) ->
+  whereObj = convertWhere whereObj
+  collection = database.collection table
+  collection.count whereObj, (err, count) ->
+    cb? count
+update =  (table, obj, whereObj, cb, isServer, user) ->
+  whereObj = convertWhere whereObj
+  cleanObj obj 
+  ((user) ->
+    collection = database.collection table
+    collection.find whereObj, {}
+    .toArray (err, oldItems) ->
+      if not err and oldItems
+        ids = []
+        async.each oldItems, (oldItem, diffCb) ->
+          if useEncryption
+            oldItem = decryptObj oldItem, table
+          diffs = readDiffs oldItem, unpack(obj)
+          newObj = {}
+          Object.assign newObj, oldItem
+          Object.assign newObj, obj
+          asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
+            pre: true
+            id: oldItem._id.toString()
+            table: table
+            where: whereObj
+            obj: obj
+            oldObj: oldItem
+            newObj: newObj
+            changes: diffs
+            user: user
+          , (result) ->
+            if not result
+              return diffCb()
+            ndx.cache && ndx.cache.reset table
+            ndx.user = user
+            id =oldItem._id.toString()
+            delete obj._id
+            collection.updateOne
+              _id: oldItem._id
+            ,
+              $set: if useEncryption then encryptObj(obj, table) else obj
+            , (err, result) ->
+              ndx.user = user
+              asyncCallback (if isServer then 'serverUpdate' else 'update'),
+                post: true
+                id: id
+                table: table
+                obj: obj
+                oldObj: oldItem
+                newObj: newObj
+                changes: diffs
+                user: user
+                isServer: isServer
+              ids.push result.insertedId
+              diffCb()
+        , ->
+          cb? err,
+            op: 'update'
+            id: ids
+      else
+        cb? 'nothing to update',
+          op: 'update'
+          id: null      
+  )(user or ndx.user)
+insert = (table, obj, cb, isServer, user) ->
+  cleanObj obj
+  ((user) ->
+    ndx.user = user
+    asyncCallback (if isServer then 'serverPreInsert' else 'preInsert'),
+      pre: true
+      table: table
+      obj: obj
+      user: user
+    , (result) ->
+      if not result
+        return cb? []
+      ndx.cache && ndx.cache.reset table
+      ndx.user = user
+      collection = database.collection table
+      if obj._id and Object.prototype.toString.call(obj._id) is '[object String]'
+        obj._id = new ObjectId(obj._id)
+      if Object.prototype.toString.call(obj) is '[object Array]'
+        async.each obj, (o, callback) ->
+          collection.insertOne (if useEncryption then encryptObj(o, table) else o)
+          , (err, r) ->
+            err and console.log 'insert error:', err
+            ndx.user = user
+            o._id = r.insertedId
+            asyncCallback (if isServer then 'serverInsert' else 'insert'),
+              post: true
+              id: o._id
+              table: table
+              obj: o
+              user: user
+              isServer: isServer
+            cb? err, 
+              op: 'insert'
+              id: r.insertedId
+            callback()
+      else
+        collection.insertOne (if useEncryption then encryptObj(obj, table) else obj)
+        , (err, r) ->
+          err and console.log 'insert error:', err
+          ndx.user = user
+          obj._id = r.insertedId
+          asyncCallback (if isServer then 'serverInsert' else 'insert'),
+            post: true
+            id: obj._id
+            table: table
+            obj: obj
+            user: user
+            isServer: isServer
+          cb? err, 
+            op: 'insert'
+            id: r.insertedId
+  )(user or ndx.user)
+upsert = (table, obj, whereObj, cb, isServer, user) ->
+  where = convertWhere JSON.parse JSON.stringify whereObj
+  if (not whereObj or JSON.stringify(whereObj) is '{}') and obj._id
+    whereObj = {}
+    whereObj._id = obj._id.toString()
+    where = convertWhere JSON.parse JSON.stringify whereObj
+  ((user) =>
+    if not whereObj or JSON.stringify(whereObj) is '{}'
+      return @insert table, obj, cb, isServer
+    collection = database.collection table
+    collection.find where
+    .toArray (err, test) =>
+      if test and test.length
+        update table, obj, whereObj, cb, isServer
+      else
+        insert table, obj, cb, isServer
+    ###
+    if JSON.stringify(whereObj) isnt '{}'
+    ###
+  )(user or ndx.user)
+del = (table, whereObj, cb, isServer, user) ->
+  whereObj = convertWhere whereObj
+  if useEncryption
+    where = encryptWhere where, table
+  ((user) ->
+    asyncCallback (if isServer then 'serverPreDelete' else 'preDelete'),
+      pre: true
+      table: table
+      where: whereObj
+      user: user
+    , (result) ->
+      if not result
+        cb? []
+      ndx.cache && ndx.cache.reset table
+      ndx.user = user
+      collection = database.collection table
+      collection.deleteMany whereObj, null, ->
+        asyncCallback (if isServer then 'serverDelete' else 'delete'), 
+          post: true
+          table: table
+          user: ndx.user
+          isServer: isServer
+        cb?()
+  )(user or ndx.user) 
     
 module.exports =
   config: (config) ->
@@ -277,165 +438,26 @@ module.exports =
     @
   select: select
   selectOne: selectOne
-  count: (table, whereObj, cb) ->
-    whereObj = convertWhere whereObj
-    collection = database.collection table
-    collection.count whereObj, (err, count) ->
-      cb? count
-  update:  (table, obj, whereObj, cb, isServer) ->
-    whereObj = convertWhere whereObj
-    cleanObj obj 
-    ((user) ->
-      collection = database.collection table
-      collection.find whereObj, {}
-      .toArray (err, oldItems) ->
-        if not err and oldItems
-          ids = []
-          async.each oldItems, (oldItem, diffCb) ->
-            if useEncryption
-              oldItem = decryptObj oldItem, table
-            diffs = readDiffs oldItem, unpack(obj)
-            newObj = {}
-            Object.assign newObj, oldItem
-            Object.assign newObj, obj
-            asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
-              pre: true
-              id: oldItem._id.toString()
-              table: table
-              where: whereObj
-              obj: obj
-              oldObj: oldItem
-              newObj: newObj
-              changes: diffs
-              user: user
-            , (result) ->
-              if not result
-                return diffCb()
-              ndx.cache && ndx.cache.reset table
-              ndx.user = user
-              id =oldItem._id.toString()
-              delete obj._id
-              collection.updateOne
-                _id: oldItem._id
-              ,
-                $set: if useEncryption then encryptObj(obj, table) else obj
-              , (err, result) ->
-                ndx.user = user
-                asyncCallback (if isServer then 'serverUpdate' else 'update'),
-                  post: true
-                  id: id
-                  table: table
-                  obj: obj
-                  oldObj: oldItem
-                  newObj: newObj
-                  changes: diffs
-                  user: user
-                  isServer: isServer
-                ids.push result.insertedId
-                diffCb()
-          , ->
-            cb? err,
-              op: 'update'
-              id: ids
-        else
-          cb? 'nothing to update',
-            op: 'update'
-            id: null      
-    )(ndx.user)
-  insert: (table, obj, cb, isServer) ->
-    cleanObj obj
-    ((user) ->
-      ndx.user = user
-      asyncCallback (if isServer then 'serverPreInsert' else 'preInsert'),
-        pre: true
-        table: table
-        obj: obj
-        user: user
-      , (result) ->
-        if not result
-          return cb? []
-        ndx.cache && ndx.cache.reset table
-        ndx.user = user
-        collection = database.collection table
-        if obj._id and Object.prototype.toString.call(obj._id) is '[object String]'
-          obj._id = new ObjectId(obj._id)
-        if Object.prototype.toString.call(obj) is '[object Array]'
-          async.each obj, (o, callback) ->
-            collection.insertOne (if useEncryption then encryptObj(o, table) else o)
-            , (err, r) ->
-              ndx.user = user
-              o._id = r.insertedId
-              asyncCallback (if isServer then 'serverInsert' else 'insert'),
-                post: true
-                id: o._id
-                table: table
-                obj: o
-                user: user
-                isServer: isServer
-              cb? err, 
-                op: 'insert'
-                id: r.insertedId
-              callback()
-        else
-          collection.insertOne (if useEncryption then encryptObj(obj, table) else obj)
-          , (err, r) ->
-            ndx.user = user
-            obj._id = r.insertedId
-            asyncCallback (if isServer then 'serverInsert' else 'insert'),
-              post: true
-              id: obj._id
-              table: table
-              obj: obj
-              user: user
-              isServer: isServer
-            cb? err, 
-              op: 'insert'
-              id: r.insertedId
-    )(ndx.user)
-  upsert: (table, obj, whereObj, cb, isServer) ->
-    where = convertWhere JSON.parse JSON.stringify whereObj
-    if (not whereObj or JSON.stringify(whereObj) is '{}') and obj._id
-      whereObj = {}
-      whereObj._id = obj._id.toString()
-      where = convertWhere JSON.parse JSON.stringify whereObj
-    ((user) =>
-      if not whereObj or JSON.stringify(whereObj) is '{}'
-        return @insert table, obj, cb, isServer
-      collection = database.collection table
-      collection.find where
-      .toArray (err, test) =>
-        if test and test.length
-          @update table, obj, whereObj, cb, isServer
-        else
-          @insert table, obj, cb, isServer
-      ###
-      if JSON.stringify(whereObj) isnt '{}'
-      ###
-    )(ndx.user)
-  delete: (table, whereObj, cb, isServer) ->
-    whereObj = convertWhere whereObj
-    if useEncryption
-      where = encryptWhere where, table
-    ((user) ->
-      asyncCallback (if isServer then 'serverPreDelete' else 'preDelete'),
-        pre: true
-        table: table
-        where: whereObj
-        user: user
-      , (result) ->
-        if not result
-          cb? []
-        ndx.cache && ndx.cache.reset table
-        ndx.user = user
-        collection = database.collection table
-        collection.deleteMany whereObj, null, ->
-          asyncCallback (if isServer then 'serverDelete' else 'delete'), 
-            post: true
-            table: table
-            user: ndx.user
-            isServer: isServer
-          cb?()
-    )(ndx.user) 
+  count: count
+  update: update
+  insert: insert
+  upsert: upsert
+  delete: del
+  bindFns: (user) ->
+    select: (table, args, cb, isServer) ->
+      select table, args, cb, isServer, user
+    selectOne: (table, args, cb, isServer) ->
+      selectOne table, args, cb, isServer, user
+    count: (table, whereObj, cb) ->
+      count table, whereObj, cb
+    update: (table, obj, whereObj, cb, isServer) ->
+      update table, obj, whereObj, cb, isServer, user
+    insert: (table, obj, cb, isServer) ->
+      insert table, obj, cb, isServer, user
+    upsert: (table, obj, whereObj, cb, isServer) ->
+      upsert table, obj, whereObj, cb, isServer, user
+    delete: (table, whereObj, cb, isServer) ->
+      del table, whereObj, cb, isServer, user
   maintenanceOn: ->
     maintenanceMode = true
   maintenanceOff: ->
