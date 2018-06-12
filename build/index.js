@@ -412,12 +412,10 @@
                 $sort: sort
               });
             }
-            steps.push({
-              $count: 'total'
-            });
             result = (await collection.aggregate(steps));
-            total = ((await result.toArray()))[0].total;
-            steps.splice(steps.length - 1, 1);
+            //3.4 total = (await result.toArray())[0].total
+            total = ((await result.toArray())).length;
+            //3.4 steps.splice steps.length - 1, 1
             if (!args.pageAfter && hasPaging) {
               steps.push({
                 $skip: skip
