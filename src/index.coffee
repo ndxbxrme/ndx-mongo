@@ -183,6 +183,12 @@ convertWhere = (where) ->
   where
 select = (table, args, cb, isServer, user) ->
   new Promise (resolve, reject) ->
+    skip = 0
+    limit = args.pageSize or 10
+    if hasPaging = args.page or args.pageSize
+      args.page = args.page or 1
+      skip = (args.page - 1) * limit
+      limit = args.pageSize
     if ndx.cache && cacheResult = ndx.cache.get table, args, user or ndx.user
       resolve cacheResults.output
       return cb? cacheResult.output, cacheResult.total
@@ -194,14 +200,18 @@ select = (table, args, cb, isServer, user) ->
         user: user
       , (result) ->
         if not result
-          resolve []
+          resolve 
+            result: []
+            total: 0
           return cb? [], 0
         args = args or {}
         ndx.user = user
-        myCb = (err, output) ->
+        myCb = (err, output, total) ->
           ndx.user = user
           if err
-            resolve []
+            resolve
+              result: []
+              total: 0
             return cb? [], 0
           asyncCallback (if isServer then 'serverSelect' else 'select'), 
             post: true
@@ -211,11 +221,11 @@ select = (table, args, cb, isServer, user) ->
             user: user
           , ->
             ndx.user = user
-            total = output.length
-            if args.page or args.pageSize
+            total = total or output.length
+            if args.pageAfter and hasPaging
               args.page = args.page or 1
               args.pageSize = args.pageSize or 10
-              output = output.splice (args.page - 1) * args.pageSize, args.pageSize
+              output = output.splice skip, limit
             if useEncryption
               for obj in output
                 obj = decryptObj obj, table
@@ -230,7 +240,9 @@ select = (table, args, cb, isServer, user) ->
               ndx.cache && ndx.cache.set table, args, user,
                 output: output
                 total: total
-              resolve output
+              resolve 
+                result: output
+                total: total
               cb? output, total
         collection = database.collection table
         options = {}
@@ -244,12 +256,60 @@ select = (table, args, cb, isServer, user) ->
         where = convertWhere where
         #if useEncryption
         #  where = encryptWhere where, table
-        collection.find where, options
-        .sort sort
-        .toArray myCb        
+        if args.aggregate
+          steps = []
+          steps.push
+            $match: where
+          group = 
+            _id: '$' + args.aggregate
+          hasSort = false
+          if Object.keys(sort).length
+            hasSort = true
+            for key of sort
+              group[key] =
+                $first: '$' + key
+          steps.push
+            $group: group
+          if hasSort
+            steps.push
+              $sort: sort
+          steps.push
+            $count: 'total'
+          result = await collection.aggregate steps
+          total = (await result.toArray())[0].total
+          steps.splice steps.length - 1, 1
+          if not args.pageAfter and hasPaging
+            steps.push
+              $skip: skip
+            steps.push
+              $limit: limit
+          result = await collection.aggregate steps
+          items = []
+          for item in await result.toArray()
+            items.push if args.aggregateField and args.aggregateField is '_id' then ObjectId(item._id) else item._id
+          if args.aggregateWhere
+            where = args.aggregateWhere
+          where[args.aggregateField or args.aggregate] =
+            $in: items
+          if args.aggregateTable
+            collection = database.collection args.aggregateTable
+          result = await collection.find where, options
+          .sort sort
+          myCb null, await result.toArray(), total
+        else
+          if not args.pageAfter and hasPaging
+            result = await collection.find where, options
+            .sort sort
+            .skip skip
+            .limit limit
+            myCb null, await result.toArray(), await result.count()
+          else
+            result = await collection.find where, options
+            .sort sort
+            myCb null, await result.toArray()
     )(user or ndx.user)
 selectOne = (table, args, cb, isServer, user) ->
-  output = await select table, args, null, isServer, user
+  output = (await select table, args, null, isServer, user).result
   if output and output.length
     return output[0]
   else

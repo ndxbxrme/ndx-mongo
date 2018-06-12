@@ -294,7 +294,14 @@
 
   select = function(table, args, cb, isServer, user) {
     return new Promise(function(resolve, reject) {
-      var cacheResult;
+      var cacheResult, hasPaging, limit, skip;
+      skip = 0;
+      limit = args.pageSize || 10;
+      if (hasPaging = args.page || args.pageSize) {
+        args.page = args.page || 1;
+        skip = (args.page - 1) * limit;
+        limit = args.pageSize;
+      }
       if (ndx.cache && (cacheResult = ndx.cache.get(table, args, user || ndx.user))) {
         resolve(cacheResults.output);
         return typeof cb === "function" ? cb(cacheResult.output, cacheResult.total) : void 0;
@@ -305,18 +312,24 @@
           table: table,
           args: args,
           user: user
-        }, function(result) {
-          var collection, myCb, options, sort, where;
+        }, async function(result) {
+          var collection, group, hasSort, item, items, j, key, len, myCb, options, ref, sort, steps, total, where;
           if (!result) {
-            resolve([]);
+            resolve({
+              result: [],
+              total: 0
+            });
             return typeof cb === "function" ? cb([], 0) : void 0;
           }
           args = args || {};
           ndx.user = user;
-          myCb = function(err, output) {
+          myCb = function(err, output, total) {
             ndx.user = user;
             if (err) {
-              resolve([]);
+              resolve({
+                result: [],
+                total: 0
+              });
               return typeof cb === "function" ? cb([], 0) : void 0;
             }
             return asyncCallback((isServer ? 'serverSelect' : 'select'), {
@@ -326,13 +339,13 @@
               isServer: isServer,
               user: user
             }, function() {
-              var j, len, obj, total;
+              var j, len, obj;
               ndx.user = user;
-              total = output.length;
-              if (args.page || args.pageSize) {
+              total = total || output.length;
+              if (args.pageAfter && hasPaging) {
                 args.page = args.page || 1;
                 args.pageSize = args.pageSize || 10;
-                output = output.splice((args.page - 1) * args.pageSize, args.pageSize);
+                output = output.splice(skip, limit);
               }
               if (useEncryption) {
                 for (j = 0, len = output.length; j < len; j++) {
@@ -352,7 +365,10 @@
                   output: output,
                   total: total
                 });
-                resolve(output);
+                resolve({
+                  result: output,
+                  total: total
+                });
                 return typeof cb === "function" ? cb(output, total) : void 0;
               });
             });
@@ -371,7 +387,72 @@
           where = convertWhere(where);
           //if useEncryption
           //  where = encryptWhere where, table
-          return collection.find(where, options).sort(sort).toArray(myCb);
+          if (args.aggregate) {
+            steps = [];
+            steps.push({
+              $match: where
+            });
+            group = {
+              _id: '$' + args.aggregate
+            };
+            hasSort = false;
+            if (Object.keys(sort).length) {
+              hasSort = true;
+              for (key in sort) {
+                group[key] = {
+                  $first: '$' + key
+                };
+              }
+            }
+            steps.push({
+              $group: group
+            });
+            if (hasSort) {
+              steps.push({
+                $sort: sort
+              });
+            }
+            steps.push({
+              $count: 'total'
+            });
+            result = (await collection.aggregate(steps));
+            total = ((await result.toArray()))[0].total;
+            steps.splice(steps.length - 1, 1);
+            if (!args.pageAfter && hasPaging) {
+              steps.push({
+                $skip: skip
+              });
+              steps.push({
+                $limit: limit
+              });
+            }
+            result = (await collection.aggregate(steps));
+            items = [];
+            ref = (await result.toArray());
+            for (j = 0, len = ref.length; j < len; j++) {
+              item = ref[j];
+              items.push(args.aggregateField && args.aggregateField === '_id' ? ObjectId(item._id) : item._id);
+            }
+            if (args.aggregateWhere) {
+              where = args.aggregateWhere;
+            }
+            where[args.aggregateField || args.aggregate] = {
+              $in: items
+            };
+            if (args.aggregateTable) {
+              collection = database.collection(args.aggregateTable);
+            }
+            result = (await collection.find(where, options).sort(sort));
+            return myCb(null, (await result.toArray()), total);
+          } else {
+            if (!args.pageAfter && hasPaging) {
+              result = (await collection.find(where, options).sort(sort).skip(skip).limit(limit));
+              return myCb(null, (await result.toArray()), (await result.count()));
+            } else {
+              result = (await collection.find(where, options).sort(sort));
+              return myCb(null, (await result.toArray()));
+            }
+          }
         });
       })(user || ndx.user);
     });
@@ -379,7 +460,7 @@
 
   selectOne = async function(table, args, cb, isServer, user) {
     var output;
-    output = (await select(table, args, null, isServer, user));
+    output = ((await select(table, args, null, isServer, user))).result;
     if (output && output.length) {
       return output[0];
     } else {
