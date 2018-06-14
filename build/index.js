@@ -441,11 +441,11 @@
               collection = database.collection(args.aggregateTable);
             }
             result = (await collection.find(where, options).sort(sort));
-            return myCb(null, (await result.toArray()), total);
+            return myCb(null, (args.totalOnly ? [] : (await result.toArray())), total);
           } else {
             if (!args.pageAfter && hasPaging) {
               result = (await collection.find(where, options).sort(sort).skip(skip).limit(limit));
-              return myCb(null, (await result.toArray()), (await result.count()));
+              return myCb(null, (args.totalOnly ? [] : (await result.toArray())), (await result.count()));
             } else {
               result = (await collection.find(where, options).sort(sort));
               return myCb(null, (await result.toArray()));

@@ -298,14 +298,14 @@ select = (table, args, cb, isServer, user) ->
             collection = database.collection args.aggregateTable
           result = await collection.find where, options
           .sort sort
-          myCb null, await result.toArray(), total
+          myCb null, (if args.totalOnly then [] else await result.toArray()), total
         else
           if not args.pageAfter and hasPaging
             result = await collection.find where, options
             .sort sort
             .skip skip
             .limit limit
-            myCb null, await result.toArray(), await result.count()
+            myCb null, (if args.totalOnly then [] else await result.toArray()), await result.count()
           else
             result = await collection.find where, options
             .sort sort

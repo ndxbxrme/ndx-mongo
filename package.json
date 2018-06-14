@@ -1,6 +1,6 @@
 {
   "name": "ndx-mongo",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "description": "Mongo database connector for ndx-framework apps",
   "main": "build/index.js",
   "scripts": {
