@@ -176,7 +176,10 @@ convertWhere = (where) ->
           delete base[newroute.split(/\./g)[0]]
         else
           if key is '_id' or newroute is '_id'
-            obj = new ObjectId obj
+            if obj
+              obj = new ObjectId obj
+            else
+              obj = new ObjectId 0x000000000000000000000000
           base[key] = obj
   walk where, where, ''
   delete where['#']
@@ -194,6 +197,7 @@ select = (table, args, cb, isServer, user) ->
       return cb? cacheResult.output, cacheResult.total
     ((user) ->
       asyncCallback (if isServer then 'serverPreSelect' else 'preSelect'), 
+        op: 'preSelect'
         pre: true
         table: table
         args: args
@@ -214,6 +218,7 @@ select = (table, args, cb, isServer, user) ->
               total: 0
             return cb? [], 0
           asyncCallback (if isServer then 'serverSelect' else 'select'), 
+            op: 'select'
             post: true
             table: table
             objs: output
@@ -230,6 +235,7 @@ select = (table, args, cb, isServer, user) ->
               for obj in output
                 obj = decryptObj obj, table
             asyncCallback (if isServer then 'serverSelectTransform' else 'selectTransform'),
+              op: 'selectTransform'
               transformer: args.transformer
               table: table
               objs: output
@@ -339,6 +345,7 @@ update =  (table, obj, whereObj, cb, isServer, user) ->
           Object.assign newObj, oldItem
           Object.assign newObj, obj
           asyncCallback (if isServer then 'serverPreUpdate' else 'preUpdate'),
+            op: 'update'
             pre: true
             id: oldItem._id.toString()
             table: table
@@ -362,6 +369,7 @@ update =  (table, obj, whereObj, cb, isServer, user) ->
             , (err, result) ->
               ndx.user = user
               asyncCallback (if isServer then 'serverUpdate' else 'update'),
+                op: 'update'
                 post: true
                 id: id
                 table: table
@@ -387,6 +395,7 @@ insert = (table, obj, cb, isServer, user) ->
   ((user) ->
     ndx.user = user
     asyncCallback (if isServer then 'serverPreInsert' else 'preInsert'),
+      op: 'insert'
       pre: true
       table: table
       obj: obj
@@ -407,6 +416,7 @@ insert = (table, obj, cb, isServer, user) ->
             ndx.user = user
             o._id = r.insertedId
             asyncCallback (if isServer then 'serverInsert' else 'insert'),
+              op: 'insert'
               post: true
               id: o._id
               table: table
@@ -424,6 +434,7 @@ insert = (table, obj, cb, isServer, user) ->
           ndx.user = user
           obj._id = r.insertedId
           asyncCallback (if isServer then 'serverInsert' else 'insert'),
+            op: 'insert'
             post: true
             id: obj._id
             table: table
@@ -460,6 +471,7 @@ del = (table, whereObj, cb, isServer, user) ->
     where = encryptWhere where, table
   ((user) ->
     asyncCallback (if isServer then 'serverPreDelete' else 'preDelete'),
+      op: 'delete'
       pre: true
       table: table
       where: whereObj
@@ -472,6 +484,7 @@ del = (table, whereObj, cb, isServer, user) ->
       collection = database.collection table
       collection.deleteMany whereObj, null, ->
         asyncCallback (if isServer then 'serverDelete' else 'delete'), 
+          op: 'delete'
           post: true
           table: table
           user: ndx.user

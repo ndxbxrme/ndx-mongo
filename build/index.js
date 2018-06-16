@@ -279,7 +279,11 @@
             results1.push(delete base[newroute.split(/\./g)[0]]);
           } else {
             if (key === '_id' || newroute === '_id') {
-              obj = new ObjectId(obj);
+              if (obj) {
+                obj = new ObjectId(obj);
+              } else {
+                obj = new ObjectId(0x000000000000000000000000);
+              }
             }
             results1.push(base[key] = obj);
           }
@@ -308,6 +312,7 @@
       }
       return (function(user) {
         return asyncCallback((isServer ? 'serverPreSelect' : 'preSelect'), {
+          op: 'preSelect',
           pre: true,
           table: table,
           args: args,
@@ -333,6 +338,7 @@
               return typeof cb === "function" ? cb([], 0) : void 0;
             }
             return asyncCallback((isServer ? 'serverSelect' : 'select'), {
+              op: 'select',
               post: true,
               table: table,
               objs: output,
@@ -354,6 +360,7 @@
                 }
               }
               return asyncCallback((isServer ? 'serverSelectTransform' : 'selectTransform'), {
+                op: 'selectTransform',
                 transformer: args.transformer,
                 table: table,
                 objs: output,
@@ -495,6 +502,7 @@
             Object.assign(newObj, oldItem);
             Object.assign(newObj, obj);
             return asyncCallback((isServer ? 'serverPreUpdate' : 'preUpdate'), {
+              op: 'update',
               pre: true,
               id: oldItem._id.toString(),
               table: table,
@@ -520,6 +528,7 @@
               }, function(err, result) {
                 ndx.user = user;
                 asyncCallback((isServer ? 'serverUpdate' : 'update'), {
+                  op: 'update',
                   post: true,
                   id: id,
                   table: table,
@@ -555,6 +564,7 @@
     return (function(user) {
       ndx.user = user;
       return asyncCallback((isServer ? 'serverPreInsert' : 'preInsert'), {
+        op: 'insert',
         pre: true,
         table: table,
         obj: obj,
@@ -577,6 +587,7 @@
               ndx.user = user;
               o._id = r.insertedId;
               asyncCallback((isServer ? 'serverInsert' : 'insert'), {
+                op: 'insert',
                 post: true,
                 id: o._id,
                 table: table,
@@ -599,6 +610,7 @@
             ndx.user = user;
             obj._id = r.insertedId;
             asyncCallback((isServer ? 'serverInsert' : 'insert'), {
+              op: 'insert',
               post: true,
               id: obj._id,
               table: table,
@@ -651,6 +663,7 @@
     }
     return (function(user) {
       return asyncCallback((isServer ? 'serverPreDelete' : 'preDelete'), {
+        op: 'delete',
         pre: true,
         table: table,
         where: whereObj,
@@ -667,6 +680,7 @@
         collection = database.collection(table);
         return collection.deleteMany(whereObj, null, function() {
           asyncCallback((isServer ? 'serverDelete' : 'delete'), {
+            op: 'delete',
             post: true,
             table: table,
             user: ndx.user,
