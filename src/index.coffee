@@ -146,6 +146,7 @@ unpack = (diffs, out) ->
       myout = myout[bit]
   out
 convertWhere = (where) ->
+  #console.log where
   walk = (base, current, route) ->
     if current and current.hasOwnProperty('$like')
       current.$regex = ".*#{current.$like or ''}.*"
@@ -185,6 +186,7 @@ convertWhere = (where) ->
   delete where['#']
   where
 select = (table, args, cb, isServer, user) ->
+  #console.log 'select', table
   new Promise (resolve, reject) ->
     skip = 0
     limit = args.pageSize or 10
@@ -329,6 +331,7 @@ count = (table, whereObj, cb) ->
   collection.count whereObj, (err, count) ->
     cb? count
 update =  (table, obj, whereObj, cb, isServer, user) ->
+  #console.log 'update', table
   whereObj = convertWhere whereObj
   cleanObj obj 
   ((user) ->
@@ -391,6 +394,7 @@ update =  (table, obj, whereObj, cb, isServer, user) ->
           id: null      
   )(user or ndx.user)
 insert = (table, obj, cb, isServer, user) ->
+  #console.log 'insert', table
   cleanObj obj
   ((user) ->
     ndx.user = user

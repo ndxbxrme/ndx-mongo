@@ -234,6 +234,7 @@
 
   convertWhere = function(where) {
     var walk;
+    //console.log where
     walk = function(base, current, route) {
       var item, key, newroute, obj, results1, type;
       if (current && current.hasOwnProperty('$like')) {
@@ -297,6 +298,7 @@
   };
 
   select = function(table, args, cb, isServer, user) {
+    //console.log 'select', table
     return new Promise(function(resolve, reject) {
       var cacheResult, hasPaging, limit, skip;
       skip = 0;
@@ -483,6 +485,7 @@
   };
 
   update = function(table, obj, whereObj, cb, isServer, user) {
+    //console.log 'update', table
     whereObj = convertWhere(whereObj);
     cleanObj(obj);
     return (function(user) {
@@ -560,6 +563,7 @@
   };
 
   insert = function(table, obj, cb, isServer, user) {
+    //console.log 'insert', table
     cleanObj(obj);
     return (function(user) {
       ndx.user = user;
