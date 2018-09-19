@@ -233,7 +233,7 @@
   };
 
   convertWhere = function(where) {
-    var walk;
+    var e, walk;
     //console.log where
     walk = function(base, current, route) {
       var item, key, newroute, obj, results1, type;
@@ -292,7 +292,14 @@
       }
       return results1;
     };
-    walk(where, where, '');
+    try {
+      walk(where, where, '');
+    } catch (error) {
+      e = error;
+      where = {
+        nothing: true
+      };
+    }
     delete where['#'];
     return where;
   };

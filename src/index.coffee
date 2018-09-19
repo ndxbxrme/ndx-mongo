@@ -182,7 +182,11 @@ convertWhere = (where) ->
             else
               obj = new ObjectId 0x000000000000000000000000
           base[key] = obj
-  walk where, where, ''
+  try
+    walk where, where, ''
+  catch e
+    where =
+      nothing: true
   delete where['#']
   where
 select = (table, args, cb, isServer, user) ->
